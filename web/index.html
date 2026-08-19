@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VR-Segmentation — DICOM to 3D</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--border:#27303a;--accent:#5bb6ff;--accent2:#2ecc71;--text:#e6edf3;--muted:#8b949e;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font:15px/1.5 'Segoe UI',system-ui,sans-serif;}
+  header{padding:22px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;}
+  header h1{font-size:20px;font-weight:700;}
+  header .tag{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:2px 8px;border-radius:20px;}
+  .wrap{max-width:1200px;margin:0 auto;padding:28px 32px;}
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:24px;}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;}
+  h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px;}
+  #drop{border:2px dashed var(--border);border-radius:12px;padding:34px 18px;text-align:center;cursor:pointer;transition:.15s;}
+  #drop.hover{border-color:var(--accent);background:rgba(91,182,255,.08);}
+  #drop .big{font-size:38px;opacity:.5;}
+  #drop p{color:var(--muted);margin-top:8px;font-size:13px;}
+  input[type=text],select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:9px 11px;border-radius:8px;margin-top:10px;font-size:14px;}
+  button{background:var(--accent);color:#04101c;border:none;padding:10px 16px;border-radius:8px;font-weight:600;
+    cursor:pointer;margin-top:12px;width:100%;font-size:14px;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+  .job{margin-top:14px;font-size:13px;}
+  .bar{height:6px;background:var(--bg);border-radius:4px;overflow:hidden;margin:8px 0;}
+  .bar>i{display:block;height:100%;width:30%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s;}
+  .log{font:11px/1.5 ui-monospace,Consolas,monospace;color:var(--muted);background:var(--bg);border-radius:8px;
+    padding:10px;margin-top:10px;max-height:160px;overflow:auto;white-space:pre-wrap;}
+  .ds{border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden;}
+  .ds h3{padding:12px 16px;background:#1b222c;font-size:15px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  .ds h3 .meta{font-size:12px;color:var(--muted);font-weight:400;}
+  .ds .body{padding:16px;display:none;}
+  .ds.open .body{display:block;}
+  .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px;}
+  .thumbs img{width:100%;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:#000;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;}
+  .chip{font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:20px;cursor:pointer;
+    display:flex;align-items:center;gap:6px;user-select:none;}
+  .chip .dot{width:10px;height:10px;border-radius:50%;}
+  .chip.off{opacity:.4;}
+  #viewer{width:100%;height:420px;background:#05080d;border-radius:10px;border:1px solid var(--border);}
+  .report{font:12px/1.6 ui-monospace,Consolas,monospace;color:var(--muted);background:var(--bg);padding:12px;
+    border-radius:8px;margin-top:10px;white-space:pre-wrap;max-height:180px;overflow:auto;}
+  .empty{color:var(--muted);font-size:14px;padding:20px;text-align:center;}
+  #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:50;cursor:zoom-out;}
+  #lightbox img{max-width:94%;max-height:94%;border-radius:8px;}
+  a.dl{color:var(--accent);font-size:12px;text-decoration:none;}
+  .est{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;}
+  .est h4{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px;}
+  .est table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .est td{padding:3px 0;color:var(--text);}
+  .est td.t{text-align:right;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .est .tot{border-top:1px solid var(--border);font-weight:600;}
+  .est .note{color:var(--muted);font-size:11px;margin-top:8px;line-height:1.4;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧠 VR-Segmentation</h1>
+  <span class="tag">DICOM → 3D models</span>
+  <span class="tag" id="devbadge">device: …</span>
+  <a href="/brain.html" style="margin-left:auto;color:var(--accent);font-size:13px;
+     text-decoration:none;border:1px solid var(--border);padding:5px 12px;border-radius:20px">
+     🧠 Neuroplasticity Explorer →</a>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <!-- LEFT: upload -->
+    <div>
+      <div class="panel">
+        <h2>Upload dataset</h2>
+        <div id="drop">
+          <div class="big">⬆</div>
+          <strong>Drop a .zip of DICOM files</strong>
+          <p>or click to browse</p>
+          <input type="file" id="file" accept=".zip" hidden>
+        </div>
+        <input type="text" id="name" placeholder="Dataset name (optional)">
+        <select id="engine">
+          <option value="heuristic">Fast engine (heuristic — lungs/bone/organs blobs)</option>
+          <option value="totalseg">AI organs (TotalSegmentator — 100+ structures)</option>
+        </select>
+        <select id="modality">
+          <option value="">Auto-detect modality</option>
+          <option value="CT">CT</option>
+          <option value="MR">MR (brain)</option>
+          <option value="PT">PET</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted);cursor:pointer;">
+          <input type="checkbox" id="fast"> Fast mode (skip MedSAM — brain finishes ~3× faster)
+        </label>
+        <button id="go" disabled>Segment</button>
+        <div id="estimate" style="margin-top:14px;"></div>
+        <div class="job" id="job" style="display:none">
+          <div id="jobmsg">Queued…</div>
+          <div class="bar"><i id="barfill"></i></div>
+          <div id="jobstep" style="font-size:12px;color:var(--muted);margin-top:4px;"></div>
+          <div class="log" id="joblog"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: results -->
+    <div class="panel">
+      <h2>Datasets &amp; 3D output</h2>
+      <div id="datasets"><div class="empty">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<div id="lightbox"><img id="lbimg"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+const PALETTE = ['#5bb6ff','#ff6b6b','#f5e98c','#7CFC9B','#c792ea','#ff9ec4','#ffa94d','#74e0d8','#b0bec5'];
+
+// ---------- device + per-step time estimates ----------
+// [label, cpu_seconds, gpu_seconds]  (gpu only helps deep-learning steps)
+const STEPS = {
+  MR: [['Load + N4 bias correction',45,45],['NLM denoise',60,60],
+       ['BET skull strip',60,60],['MedSAM refine',600,25],
+       ['Tissue classification (GMM)',20,20],['3D reconstruction',35,35]],
+  CT: [['Load + HU conversion',10,10],['Body / lungs / bone / soft tissue',40,40],
+       ['3D mesh reconstruction',40,40]],
+  PT: [['Load + normalize',8,8],['Hotspot (TBR)',15,15],
+       ['MIP + 3D reconstruction',30,30]],
+};
+let DEVICE='cpu';
+const fmt=s=>s>=60?`~${Math.round(s/60)} min`:`~${s}s`;
+
+async function initDevice(){
+  try{ const d=await (await fetch('/api/device')).json();
+    DEVICE=d.device; document.getElementById('devbadge').textContent='device: '+d.name;
+    document.getElementById('devbadge').style.color=d.device==='cuda'?'#7CFC9B':'#ffa94d';
+  }catch(e){}
+  renderEstimate();
+}
+function renderEstimate(){
+  // TotalSegmentator engine has its own estimate (modality-independent)
+  if(document.getElementById('engine')?.value==='totalseg'){
+    const cpu=DEVICE!=='cuda';
+    const rows=[['Load + DICOM→NIfTI',5,5],
+                ['TotalSegmentator (nnU-Net)',cpu?90:30,30],
+                ['Mesh 100+ structures',45,45]];
+    const gi=cpu?1:2; let tot=0;
+    let html='<div class="est"><h4>Estimated time — TotalSegmentator on '+(cpu?'CPU':'GPU')+'</h4><table>';
+    rows.forEach(r=>{tot+=r[gi];html+=`<tr><td>${r[0]}</td><td class="t">${fmt(r[gi])}</td></tr>`;});
+    html+=`<tr class="tot"><td>Total</td><td class="t">${fmt(tot)}</td></tr></table>`;
+    html+='<div class="note">Segments 100+ individually-labeled organs/bones (CT &amp; MR). First run downloads model weights (~135 MB).</div></div>';
+    document.getElementById('estimate').innerHTML=html; return;
+  }
+  const mod=document.getElementById('modality').value||'MR';
+  const key={'':'MR','MR':'MR','CT':'CT','PT':'PT'}[mod]||'MR';
+  const rows=STEPS[key], gi=DEVICE==='cuda'?2:1;
+  let tot=0, html='<div class="est"><h4>Estimated time — '+key+' on '+(DEVICE==='cuda'?'GPU':'CPU')+'</h4><table>';
+  rows.forEach(r=>{ tot+=r[gi]; html+=`<tr><td>${r[0]}</td><td class="t">${fmt(r[gi])}</td></tr>`; });
+  html+=`<tr class="tot"><td>Total</td><td class="t">${fmt(tot)}</td></tr></table>`;
+  if(DEVICE!=='cuda' && key==='MR')
+    html+='<div class="note">⚠ No GPU detected. MedSAM dominates on CPU — choose “Fast (skip MedSAM)” to finish in ~3 min, or run on a CUDA machine for ~'+fmt(STEPS.MR.reduce((a,r)=>a+r[2],0))+'.</div>';
+  html+='<div class="note">Estimates are approximate; the live log shows real per-step timing.</div></div>';
+  document.getElementById('estimate').innerHTML=html;
+}
+document.getElementById('modality').addEventListener('change',renderEstimate);
+document.getElementById('engine').addEventListener('change',renderEstimate);
+
+// ---------- upload ----------
+const drop=document.getElementById('drop'), fileIn=document.getElementById('file'),
+  goBtn=document.getElementById('go'); let chosen=null;
+drop.onclick=()=>fileIn.click();
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('hover');}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('hover');}));
+drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files[0]) setFile(ev.dataTransfer.files[0]); });
+fileIn.onchange=()=>{ if(fileIn.files[0]) setFile(fileIn.files[0]); };
+function setFile(f){ chosen=f; drop.querySelector('strong').textContent=f.name; goBtn.disabled=false; }
+
+goBtn.onclick=async()=>{
+  if(!chosen) return;
+  goBtn.disabled=true;
+  const fd=new FormData();
+  fd.append('file',chosen);
+  fd.append('name',document.getElementById('name').value);
+  fd.append('modality',document.getElementById('modality').value);
+  fd.append('no_medsam',document.getElementById('fast').checked?'1':'');
+  fd.append('engine',document.getElementById('engine').value);
+  const job=document.getElementById('job'); job.style.display='block';
+  document.getElementById('jobmsg').textContent='Uploading…';
+  try{
+    const r=await fetch('/api/upload',{method:'POST',body:fd});
+    if(!r.ok){ throw new Error((await r.json()).detail||'upload failed'); }
+    const {job_id}=await r.json();
+    poll(job_id);
+  }catch(e){ document.getElementById('jobmsg').textContent='❌ '+e.message; goBtn.disabled=false; }
+};
+
+function poll(id){
+  const msg=document.getElementById('jobmsg'), log=document.getElementById('joblog'),
+    fill=document.getElementById('barfill'), stepEl=document.getElementById('jobstep');
+  const t0=Date.now();
+  const iv=setInterval(async()=>{
+    let j;
+    try{ const r=await fetch('/api/jobs/'+id); if(!r.ok) throw 0; j=await r.json(); }
+    catch(e){ stepEl.textContent='(lost connection to server — is it still running?)'; return; }
+    const icon=({queued:'⏳ ',running:'⚙️ ',done:'✅ ',error:'❌ '}[j.status]||'');
+    msg.textContent=icon+j.message;
+    log.textContent=(j.log||[]).join('\n'); log.scrollTop=log.scrollHeight;
+    // Honest progress: parse the "[x/N]" step header from the live log
+    let pct=5;
+    const m=(j.message||'').match(/\[(\d+)\/(\d+)\]/);
+    if(m) pct=Math.round((+m[1]-0.5)/(+m[2])*100);
+    const elapsed=Math.round((Date.now()-t0)/1000);
+    stepEl.textContent=`elapsed ${Math.floor(elapsed/60)}m ${elapsed%60}s`;
+    if(j.status==='done') pct=100;
+    if(j.status==='error') stepEl.textContent+=' — see log';
+    fill.style.width=pct+'%';
+    if(j.status==='done'||j.status==='error'){
+      clearInterval(iv);
+      goBtn.disabled=false;
+      if(j.status==='done'){ msg.textContent='✅ Done in '+stepEl.textContent.replace('elapsed ',''); loadDatasets(); }
+    }
+  },1500);
+  // also refresh the gallery periodically so finished datasets appear even if poll hiccups
+  const refresh=setInterval(loadDatasets, 20000);
+  setTimeout(()=>clearInterval(refresh), 30*60*1000);
+}
+
+// ---------- datasets ----------
+async function loadDatasets(){
+  const wrap=document.getElementById('datasets');
+  const {datasets}=await (await fetch('/api/datasets')).json();
+  if(!datasets.length){ wrap.innerHTML='<div class="empty">No datasets yet — upload a zip to begin.</div>'; return; }
+  wrap.innerHTML='';
+  datasets.forEach(ds=>wrap.appendChild(renderDS(ds)));
+}
+
+function renderDS(ds){
+  const el=document.createElement('div'); el.className='ds';
+  const nImg=ds.images.length, nMesh=ds.meshes.length;
+  el.innerHTML=`<h3><span>${ds.name}</span>
+    <span class="meta">${nImg} image(s) · ${nMesh} mesh(es)</span></h3><div class="body"></div>`;
+  const head=el.querySelector('h3'), body=el.querySelector('.body');
+  head.onclick=()=>{ el.classList.toggle('open'); if(el.classList.contains('open')&&!body.dataset.built) build(); };
+  function build(){
+    body.dataset.built='1';
+    // images
+    if(nImg){
+      const t=document.createElement('div'); t.className='thumbs';
+      ds.images.forEach(img=>{
+        const i=document.createElement('img');
+        i.src=`/output/${ds.name}/${img}`; i.loading='lazy'; i.title=img;
+        i.onclick=()=>{ document.getElementById('lbimg').src=i.src; document.getElementById('lightbox').style.display='flex'; };
+        t.appendChild(i);
+      });
+      body.appendChild(t);
+    }
+    // report
+    if(ds.report){
+      const r=document.createElement('div'); r.className='report';
+      r.textContent=JSON.stringify(ds.report,null,2); body.appendChild(r);
+    }
+    // 3D viewer
+    if(nMesh){
+      const chips=document.createElement('div'); chips.className='chips'; body.appendChild(chips);
+      const canvas=document.createElement('div'); canvas.id='v_'+ds.name; canvas.style.cssText='width:100%;height:420px';
+      const view=document.createElement('div'); view.appendChild(canvas); body.appendChild(view);
+      init3D(ds, canvas, chips);
+    }
+  }
+  return el;
+}
+
+function init3D(ds, host, chips){
+  const W=host.clientWidth||800, H=420;
+  const scene=new THREE.Scene(); scene.background=new THREE.Color(0x05080d);
+  const cam=new THREE.PerspectiveCamera(45,W/H,0.1,5000); cam.position.set(0,0,400);
+  const r=new THREE.WebGLRenderer({antialias:true}); r.setSize(W,H); r.setPixelRatio(devicePixelRatio);
+  host.appendChild(r.domElement);
+  const ctrl=new OrbitControls(cam,r.domElement); ctrl.enableDamping=true;
+  scene.add(new THREE.AmbientLight(0xffffff,.6));
+  const d1=new THREE.DirectionalLight(0xffffff,.8); d1.position.set(1,1,1); scene.add(d1);
+  const d2=new THREE.DirectionalLight(0x88aaff,.4); d2.position.set(-1,-.5,-1); scene.add(d2);
+  const loader=new STLLoader(); const group=new THREE.Group(); scene.add(group);
+  let box=new THREE.Box3(), loaded=0;
+  ds.meshes.forEach((mesh,i)=>{
+    const url=`/output/${ds.name}/${mesh}`;
+    const color=PALETTE[i%PALETTE.length];
+    loader.load(url,geo=>{
+      geo.computeVertexNormals();
+      const mat=new THREE.MeshPhongMaterial({color,shininess:30,specular:0x222222,
+        transparent:mesh.includes('body')||mesh.includes('uptake'),opacity:mesh.includes('body')||mesh.includes('uptake')?0.18:1.0});
+      const m=new THREE.Mesh(geo,mat); group.add(m);
+      box.expandByObject(m); loaded++;
+      if(loaded===ds.meshes.length) frame();
+      // toggle chip
+      const label=mesh.split('/').pop().replace('.stl','');
+      const chip=document.createElement('div'); chip.className='chip';
+      chip.innerHTML=`<span class="dot" style="background:${color}"></span>${label}`;
+      chip.onclick=()=>{ m.visible=!m.visible; chip.classList.toggle('off',!m.visible); };
+      chips.appendChild(chip);
+    });
+  });
+  function frame(){
+    const c=box.getCenter(new THREE.Vector3()), s=box.getSize(new THREE.Vector3());
+    group.position.sub(c);
+    const maxd=Math.max(s.x,s.y,s.z)||200; cam.position.set(0,0,maxd*1.8); ctrl.target.set(0,0,0);
+  }
+  (function loop(){ requestAnimationFrame(loop); ctrl.update(); r.render(scene,cam); })();
+  new ResizeObserver(()=>{ const w=host.clientWidth; r.setSize(w,H); cam.aspect=w/H; cam.updateProjectionMatrix(); }).observe(host);
+}
+
+// fast-mode checkbox also affects the MR estimate
+document.getElementById('fast').addEventListener('change',()=>{
+  const f=document.getElementById('fast').checked;
+  STEPS.MR[3]=f?['MedSAM refine (skipped)',0,0]:['MedSAM refine',600,25];
+  renderEstimate();
+});
+
+document.getElementById('lightbox').onclick=function(){ this.style.display='none'; };
+initDevice();
+loadDatasets();
+</script>
+</body>
+</html>

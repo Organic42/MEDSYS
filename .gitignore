@@ -1,0 +1,37 @@
+# Model checkpoints (download separately — see README)
+*.pth
+medsam_vit_b.pth
+
+# Patient DICOM data (PHI — never commit)
+dicom_data/
+*.IMA
+*.dcm
+
+# Generated outputs — regenerable from the pipeline, and may contain
+# real patient-derived imagery/volumes. Never commit.
+output/
+
+# Debug / scratch logs
+run_log.txt
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Scratch & runtime
+regen_mesh.py
+run_totalseg.py
+_body.json
+_uploads/
+_nifti/
+_work/
+.claude/
+# Job store
+*.db
+*.db-wal
+*.db-shm

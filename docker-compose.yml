@@ -1,0 +1,74 @@
+# Production stack: API + Redis queue + background worker(s).
+#   docker compose up --build
+# Scale workers:           docker compose up --scale worker=3
+# GPU worker (needs NVIDIA Container Toolkit):
+#   docker compose --profile gpu up
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-data:/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      VRSEG_MAX_UPLOAD_MB: "4096"
+      VRSEG_JOB_RETENTION_DAYS: "14"
+    ports:
+      - "8000:8000"
+    volumes:
+      - app-data:/data            # shared output/uploads/jobs.db with the worker
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["xvfb-run", "-a", "python", "worker.py"]  # virtual display for PyVista
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - app-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # GPU worker — `docker compose --profile gpu up`
+  worker-gpu:
+    profiles: ["gpu"]
+    build: .
+    restart: unless-stopped
+    command: ["xvfb-run", "-a", "python", "worker.py"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - app-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+
+volumes:
+  redis-data:
+  app-data:
