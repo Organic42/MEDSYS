@@ -1,0 +1,41 @@
+# Lightweight image for free-tier hosting (e.g. Hugging Face Spaces).
+# Excludes torch / TotalSegmentator / Redis+RQ — see requirements-web.txt.
+# For the full pipeline (all engines, GPU, production queue) use the root
+# Dockerfile + docker-compose.yml instead.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    PIP_NO_CACHE_DIR=1 \
+    PYVISTA_OFF_SCREEN=true \
+    VRSEG_HOST=0.0.0.0 \
+    VRSEG_OUTPUT=/data/output \
+    VRSEG_UPLOADS=/data/uploads \
+    VRSEG_DB=/data/jobs.db \
+    VRSEG_MAX_UPLOAD_MB=512 \
+    PORT=7860 \
+    HOME=/home/user
+
+# System libs needed by VTK/PyVista (headless GL) and SimpleITK
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgl1-mesa-glx libglib2.0-0 libxrender1 libxext6 libsm6 \
+        xvfb libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Hugging Face Spaces runs containers as a non-root user (UID 1000) —
+# create it and own everything the app needs to write.
+RUN useradd -m -u 1000 user
+WORKDIR /app
+
+COPY requirements-web.txt .
+RUN pip install --upgrade pip && pip install -r requirements-web.txt
+
+COPY . .
+RUN mkdir -p /data/output /data/uploads \
+    && chown -R user:user /app /data /home/user
+
+USER user
+EXPOSE 7860
+
+# xvfb-run gives PyVista a virtual display for off-screen rendering.
+CMD ["xvfb-run", "-a", "python", "app.py"]

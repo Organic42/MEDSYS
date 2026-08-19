@@ -1,5 +1,5 @@
 """
-VR-Segmentation web app — drag-and-drop DICOM zip -> segmented images + 3D models.
+MEDSYS web app — drag-and-drop DICOM zip -> segmented images + 3D models.
 
 Dev:   python app.py
 Prod:  set REDIS_URL + run a separate `python worker.py` (see docker-compose.yml)
@@ -18,7 +18,7 @@ import config
 import jobstore
 import tasks
 
-app = FastAPI(title="VR-Segmentation")
+app = FastAPI(title="MEDSYS")
 
 # ── job dispatch: Redis/RQ in prod, bounded thread pool in dev ────────────
 _executor = None
@@ -133,6 +133,24 @@ def device_info():
     return {'device': 'cpu', 'name': 'CPU'}
 
 
+def _has_module(name):
+    import importlib.util
+    return importlib.util.find_spec(name) is not None
+
+
+@app.get('/api/capabilities')
+def capabilities():
+    """What this deployment can actually do — lets the UI hide options
+    that would otherwise fail (e.g. the lightweight hosted demo has no
+    TotalSegmentator/torch, and MedSAM needs a checkpoint that isn't shipped)."""
+    return {
+        'totalseg': _has_module('totalsegmentator') and _has_module('torch'),
+        'medsam': _has_module('torch') and os.path.exists(
+            os.path.join(config.PROJECT_DIR, 'medsam_vit_b.pth')),
+        'queue': 'redis' if config.REDIS_URL else 'in-process',
+    }
+
+
 def _list_assets(ds_dir):
     pngs, meshes = [], []
     for f in sorted(os.listdir(ds_dir)):
@@ -199,6 +217,6 @@ app.mount('/', StaticFiles(directory=config.WEB_DIR, html=True), name='web')
 
 if __name__ == '__main__':
     import uvicorn
-    print(f"VR-Segmentation -> http://{config.HOST}:{config.PORT}  "
+    print(f"MEDSYS -> http://{config.HOST}:{config.PORT}  "
           f"(queue: {'redis' if config.REDIS_URL else 'in-process'})")
     uvicorn.run(app, host=config.HOST, port=config.PORT, log_level='info')

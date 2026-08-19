@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VR-Segmentation — DICOM to 3D</title>
+<title>MEDSYS — DICOM to 3D</title>
 <style>
   :root{--bg:#0d1117;--panel:#161b22;--border:#27303a;--accent:#5bb6ff;--accent2:#2ecc71;--text:#e6edf3;--muted:#8b949e;}
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -59,7 +59,7 @@
 </head>
 <body>
 <header>
-  <h1>🧠 VR-Segmentation</h1>
+  <h1>🧠 MEDSYS</h1>
   <span class="tag">DICOM → 3D models</span>
   <span class="tag" id="devbadge">device: …</span>
   <a href="/brain.html" style="margin-left:auto;color:var(--accent);font-size:13px;
@@ -82,8 +82,12 @@
         <input type="text" id="name" placeholder="Dataset name (optional)">
         <select id="engine">
           <option value="heuristic">Fast engine (heuristic — lungs/bone/organs blobs)</option>
-          <option value="totalseg">AI organs (TotalSegmentator — 100+ structures)</option>
+          <option value="totalseg" id="engineTotalseg">AI organs (TotalSegmentator — 100+ structures)</option>
         </select>
+        <p id="engineNote" style="display:none;font-size:11px;color:var(--muted);margin-top:4px">
+          AI organs engine isn't available on this deployment (needs torch + TotalSegmentator).
+          Run the full stack locally or on a VPS to use it — see the README.
+        </p>
         <select id="modality">
           <option value="">Auto-detect modality</option>
           <option value="CT">CT</option>
@@ -328,7 +332,19 @@ document.getElementById('fast').addEventListener('change',()=>{
 });
 
 document.getElementById('lightbox').onclick=function(){ this.style.display='none'; };
+
+async function initCapabilities(){
+  try{
+    const c = await (await fetch('/api/capabilities')).json();
+    if(!c.totalseg){
+      document.getElementById('engineTotalseg').disabled = true;
+      document.getElementById('engineNote').style.display = 'block';
+    }
+  }catch(e){ /* capabilities check is best-effort; engine stays enabled */ }
+}
+
 initDevice();
+initCapabilities();
 loadDatasets();
 </script>
 </body>
