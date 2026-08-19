@@ -37,9 +37,15 @@ warnings.filterwarnings('ignore')
 
 import time
 
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_ROOT = os.path.join(PROJECT_DIR, 'output')
-MEDSAM_CHECKPOINT = os.path.join(PROJECT_DIR, 'medsam_vit_b.pth')
+# Path resolution lives in config.py so this module and app.py/tasks.py always
+# agree on where data goes — critical when frozen into a .exe, where a plain
+# `os.path.dirname(__file__)` would resolve inside the bundle's internal
+# resource dir instead of next to the executable.
+import config
+
+PROJECT_DIR = config.RUNTIME_DIR
+OUTPUT_ROOT = config.OUTPUT_ROOT
+MEDSAM_CHECKPOINT = os.path.join(config.RUNTIME_DIR, 'medsam_vit_b.pth')
 
 
 def get_device():
@@ -61,8 +67,8 @@ class Stopwatch:
 
     def lap(self, label):
         now = time.time()
-        print(f"    ⏱ {label}: {now - self.last:.1f}s "
-              f"(total {now - self.t0:.0f}s)", flush=True)
+        print(f"    [{label}: {now - self.last:.1f}s "
+              f"(total {now - self.t0:.0f}s)]", flush=True)
         self.last = now
 
     def total(self):

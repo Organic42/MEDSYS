@@ -35,3 +35,10 @@ _work/
 *.db
 *.db-wal
 *.db-shm
+
+# PyInstaller build artifacts (rebuild with: pyinstaller medsys.spec)
+build/
+dist/
+*.zip
+ct_test.zip
+mri_test.zip

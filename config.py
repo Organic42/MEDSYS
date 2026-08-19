@@ -1,18 +1,36 @@
 """Environment-driven configuration for the MEDSYS service."""
 import os
+import sys
 
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Running as a PyInstaller-frozen .exe? Two different base paths matter then:
+#   - RUNTIME_DIR: where the .exe itself lives — writable data (output,
+#     uploads, job DB) goes next to it so it's easy to find and survives
+#     re-launching the app.
+#   - BUNDLE_DIR: PyInstaller's extracted resource dir (sys._MEIPASS) — where
+#     bundled read-only assets (web/) were placed at build time.
+# In normal `python app.py` use, both are just this file's directory.
+FROZEN = bool(getattr(sys, 'frozen', False))
+if FROZEN:
+    RUNTIME_DIR = os.path.dirname(os.path.abspath(sys.executable))
+    BUNDLE_DIR = getattr(sys, '_MEIPASS', RUNTIME_DIR)
+    EXE_PATH = os.path.abspath(sys.executable)
+else:
+    RUNTIME_DIR = os.path.dirname(os.path.abspath(__file__))
+    BUNDLE_DIR = RUNTIME_DIR
+    EXE_PATH = None
+
+PROJECT_DIR = RUNTIME_DIR  # kept for backward compatibility with existing call sites
 
 
 def _path(env, default):
-    return os.path.abspath(os.environ.get(env, os.path.join(PROJECT_DIR, default)))
+    return os.path.abspath(os.environ.get(env, os.path.join(RUNTIME_DIR, default)))
 
 
 # Storage locations (override in containers via env)
 OUTPUT_ROOT = _path('VRSEG_OUTPUT', 'output')
 UPLOAD_ROOT = _path('VRSEG_UPLOADS', '_uploads')
 DB_PATH = _path('VRSEG_DB', 'jobs.db')
-WEB_DIR = os.path.join(PROJECT_DIR, 'web')
+WEB_DIR = os.path.join(BUNDLE_DIR, 'web')
 
 # Concurrency — segmentation is heavy, so serialize by default
 MAX_WORKERS = int(os.environ.get('VRSEG_MAX_WORKERS', '1'))

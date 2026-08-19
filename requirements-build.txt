@@ -1,0 +1,2 @@
+# Only needed to build the standalone Windows .exe — not part of the app itself.
+pyinstaller>=6.0.0
