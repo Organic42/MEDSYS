@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neuroplasticity Explorer</title>
+<style>
+:root{
+  --bg:#07041a; --bg2:#0b0722;
+  --panel:#100c2b; --panel2:#151038; --line:rgba(140,110,255,.16);
+  --text:#eae6ff; --muted:#8d84bb; --dim:#6d659a;
+  --violet:#a855f7; --cyan:#22d3ee; --pink:#ec4899; --amber:#fbbf24;
+  --hi:#f43f5e; --mid:#fb923c; --lo:#fbbf24; --up:#22d3ee;
+  --rail:76px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);overflow:hidden;
+  font:14px/1.55 'Segoe UI',system-ui,-apple-system,sans-serif}
+body::before{content:'';position:fixed;inset:0;z-index:-1;
+  background:radial-gradient(ellipse 70% 60% at 38% 42%,#1b1046 0%,#0c0726 48%,#07041a 100%)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:rgba(140,110,255,.28);border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ── shell ─────────────────────────────────────────────── */
+.app{display:flex;height:100vh}
+.rail{width:var(--rail);flex:none;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0;
+  background:rgba(10,6,30,.55);backdrop-filter:blur(10px)}
+.brandmark{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(150deg,#2a1a6e,#160d3d);border:1px solid rgba(168,85,247,.45);
+  box-shadow:0 0 22px rgba(168,85,247,.35);margin-bottom:12px}
+.railbtn{width:50px;height:52px;border-radius:14px;display:grid;place-items:center;gap:3px;
+  color:var(--dim);position:relative;transition:.18s}
+.railbtn span{font-size:9px;letter-spacing:.02em}
+.railbtn:hover{color:var(--text);background:rgba(168,85,247,.10)}
+.railbtn.on{color:#d8c9ff;background:linear-gradient(160deg,rgba(168,85,247,.26),rgba(34,211,238,.10));
+  border:1px solid rgba(168,85,247,.42);box-shadow:0 0 18px rgba(168,85,247,.25)}
+.railspace{flex:1}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+/* ── topbar ────────────────────────────────────────────── */
+.topbar{display:flex;align-items:center;gap:22px;padding:14px 22px;flex:none}
+.brand h1{font-size:19px;font-weight:700;letter-spacing:-.2px;white-space:nowrap}
+.brand p{font-size:11.5px;color:var(--muted)}
+.searchwrap{flex:1;max-width:620px;margin:0 auto;position:relative}
+.searchwrap input{width:100%;height:52px;border-radius:26px;padding:0 62px 0 24px;
+  background:rgba(17,12,44,.9);border:1px solid var(--line);color:var(--text);font:14.5px inherit;
+  transition:.2s}
+.searchwrap input::placeholder{color:var(--dim)}
+.searchwrap input:focus{outline:none;border-color:rgba(168,85,247,.6);
+  box-shadow:0 0 0 4px rgba(168,85,247,.10)}
+.searchgo{position:absolute;right:5px;top:5px;width:42px;height:42px;border-radius:50%;
+  background:linear-gradient(140deg,#a855f7,#6d28d9);display:grid;place-items:center;
+  box-shadow:0 4px 18px rgba(168,85,247,.5);transition:.18s}
+.searchgo:hover{transform:scale(1.06)}
+.searchgo:disabled{opacity:.5;transform:none}
+.topchip{display:flex;align-items:center;gap:10px;height:50px;padding:0 16px;border-radius:14px;
+  background:rgba(17,12,44,.8);border:1px solid var(--line);white-space:nowrap;transition:.18s}
+.topchip:hover{border-color:rgba(168,85,247,.45)}
+.topchip .t1{font-size:12.5px;font-weight:600}
+.topchip .t2{font-size:10.5px;color:var(--muted)}
+.dotlive{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399}
+
+/* ── content grid ──────────────────────────────────────── */
+.content{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:16px;
+  padding:0 22px 18px;min-height:0}
+.leftcol{display:flex;flex-direction:column;gap:14px;min-height:0}
+.rightcol{display:flex;flex-direction:column;gap:12px;min-height:0}
+
+.card{background:linear-gradient(165deg,rgba(21,16,56,.92),rgba(14,10,38,.92));
+  border:1px solid var(--line);border-radius:18px}
+.cardhead{padding:14px 18px 0}
+.cardhead h2{font-size:15px;font-weight:650;display:flex;align-items:center;gap:7px}
+.cardhead p{font-size:11.5px;color:var(--muted);margin-top:2px}
+.info{width:14px;height:14px;border-radius:50%;border:1px solid var(--dim);color:var(--dim);
+  font-size:9px;display:inline-grid;place-items:center;cursor:help;flex:none}
+
+/* ── viz ───────────────────────────────────────────────── */
+.viz{flex:1;position:relative;overflow:hidden;min-height:340px}
+#stage{position:absolute;inset:0}
+#stage canvas{display:block}
+#leaders{position:absolute;inset:0;pointer-events:none;z-index:2}
+.callout{position:absolute;z-index:3;width:172px;padding:9px 11px;border-radius:11px;
+  background:rgba(14,10,38,.93);border:1px solid var(--line);backdrop-filter:blur(6px);
+  opacity:0;transform:translateY(6px);transition:.35s;pointer-events:auto;cursor:pointer}
+.callout.on{opacity:1;transform:none}
+.callout h4{font-size:12px;font-weight:650;margin-bottom:2px}
+.callout p{font-size:10.5px;color:var(--muted);line-height:1.45}
+.callout .imp{font-size:10px;font-weight:650;margin-top:4px}
+
+.tools{position:absolute;left:14px;top:50%;transform:translateY(-50%);z-index:4;
+  display:flex;flex-direction:column;gap:2px;padding:5px;border-radius:14px;
+  background:rgba(14,10,38,.82);border:1px solid var(--line);backdrop-filter:blur(8px)}
+.tool{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--muted);
+  transition:.15s}
+.tool:hover{color:var(--text);background:rgba(168,85,247,.16)}
+.tool.on{color:#e5d9ff;background:rgba(168,85,247,.3)}
+
+.player{position:absolute;left:16px;right:16px;bottom:14px;z-index:4;display:flex;align-items:center;
+  gap:13px;padding:9px 14px;border-radius:15px;background:rgba(12,8,34,.86);
+  border:1px solid var(--line);backdrop-filter:blur(10px)}
+.playbtn{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;
+  background:linear-gradient(140deg,rgba(168,85,247,.4),rgba(109,40,217,.4));
+  border:1px solid rgba(168,85,247,.5)}
+.playmeta{flex:1;min-width:0}
+.playmeta .lab{font-size:11px;color:var(--muted);margin-bottom:5px}
+.track{height:4px;border-radius:3px;background:rgba(140,110,255,.18);position:relative;cursor:pointer}
+.fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--amber),var(--pink),var(--violet))}
+.knob{position:absolute;top:50%;width:9px;height:9px;border-radius:50%;background:#fff;
+  transform:translate(-50%,-50%);box-shadow:0 0 8px rgba(255,255,255,.8)}
+.tcode{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+
+/* ── meters ────────────────────────────────────────────── */
+.meters{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:none}
+.meter{padding:13px 18px 15px}
+.meter h3{font-size:12.5px;font-weight:650;color:#c9bdf5;display:flex;align-items:center;gap:6px}
+.grad{height:9px;border-radius:5px;margin:11px 0 7px;
+  background:linear-gradient(90deg,#facc15,#fb923c,#f43f5e,#d946ef,#a855f7)}
+.scale{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+#wave{width:100%;height:30px;display:block;margin:8px 0 4px}
+
+/* ── explore row ───────────────────────────────────────── */
+.explore{padding:13px 18px 15px;flex:none}
+.explore h3{font-size:12.5px;font-weight:650;color:#c9bdf5;margin-bottom:10px}
+.exgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}
+.excard{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:12px;
+  border:1px solid var(--line);background:rgba(10,6,30,.5);text-align:left;transition:.18s}
+.excard:hover{border-color:rgba(168,85,247,.5);background:rgba(168,85,247,.12);transform:translateY(-2px)}
+.exic{width:28px;height:28px;border-radius:9px;flex:none;display:grid;place-items:center;
+  background:rgba(168,85,247,.18);color:#c9a6ff}
+.excard .n{font-size:12px;font-weight:600;line-height:1.2}
+.excard .d{font-size:10px;color:var(--muted)}
+
+/* ── results ───────────────────────────────────────────── */
+.reshead{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 16px 12px;flex:none}
+.reshead h2{font-size:15px;font-weight:650}
+.reshead p{font-size:11.5px;color:var(--muted);margin-top:2px}
+.seg{display:flex;gap:2px;padding:3px;border-radius:10px;background:rgba(10,6,30,.7);
+  border:1px solid var(--line)}
+.seg button{padding:4px 12px;border-radius:7px;font-size:11.5px;color:var(--muted);transition:.15s}
+.seg button.on{background:rgba(168,85,247,.28);color:#e9dcff}
+.reslist{flex:1;overflow-y:auto;padding:0 16px 14px;display:flex;flex-direction:column;gap:10px}
+
+.rcard{display:flex;gap:12px;padding:13px 14px;border-radius:15px;border:1px solid var(--line);
+  background:linear-gradient(150deg,rgba(22,16,58,.85),rgba(13,9,36,.85));cursor:pointer;
+  transition:.2s;position:relative;overflow:hidden}
+.rcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.rcard:hover,.rcard.sel{border-color:rgba(168,85,247,.5);transform:translateX(-3px)}
+.rcard .body{flex:1;min-width:0}
+.rtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+.rdot{width:10px;height:10px;border-radius:50%;background:var(--c);
+  box-shadow:0 0 10px var(--c);flex:none}
+.rname{font-size:14px;font-weight:650}
+.badge{font-size:10px;font-weight:650;padding:2px 8px;border-radius:20px;
+  background:color-mix(in srgb,var(--c) 22%,transparent);color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 40%,transparent)}
+.rhead{font-size:12.5px;font-weight:600;margin-bottom:4px;line-height:1.35}
+.rdesc{font-size:11.5px;color:var(--muted);line-height:1.55}
+.rfoot{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
+.ev{display:flex;align-items:center;gap:5px;font-size:10.5px}
+.ev.established{color:#6ee7b7}.ev.emerging{color:#fcd34d}.ev.hypothesized{color:#c4b5fd}
+.bmk{margin-left:auto;color:var(--dim);transition:.15s}
+.bmk:hover,.bmk.on{color:var(--amber)}
+.thumb{width:54px;flex:none;display:grid;place-items:center;opacity:.95}
+.chev{color:var(--dim);align-self:center;flex:none}
+
+.notecard{padding:13px 16px 14px;flex:none}
+.notecard h3{font-size:12.5px;font-weight:650;display:flex;align-items:center;gap:6px;
+  margin-bottom:6px;color:#c9bdf5}
+.notecard p{font-size:11.5px;color:var(--muted);line-height:1.6}
+.notecard a{color:var(--cyan);font-size:11.5px;text-decoration:none;display:inline-block;margin-top:7px}
+
+.blank{padding:26px 18px;color:var(--muted);font-size:12.5px;line-height:1.8;text-align:center}
+.blank b{color:var(--text);font-weight:600}
+.spinner{width:15px;height:15px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--cyan);
+  border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:-3px;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.disc{font-size:10.5px;color:var(--dim);line-height:1.6;padding:0 16px 14px}
+
+@media(max-width:1180px){
+  .content{grid-template-columns:1fr;overflow-y:auto}
+  .rightcol{height:auto}.viz{min-height:420px}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- rail -->
+  <nav class="rail">
+    <div class="brandmark">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c9a6ff" stroke-width="1.5">
+        <path d="M9 3a3 3 0 00-3 3 3 3 0 00-2 5.2A3 3 0 006 16v1a3 3 0 003 3 2 2 0 002-2V5a2 2 0 00-2-2z"/>
+        <path d="M15 3a3 3 0 013 3 3 3 0 012 5.2A3 3 0 0118 16v1a3 3 0 01-3 3 2 2 0 01-2-2V5a2 2 0 012-2z"/>
+      </svg>
+    </div>
+    <button class="railbtn on" data-view="explore" title="Explore">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>Explore</span></button>
+    <button class="railbtn" data-view="map" title="Brain map">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="7" cy="7" r="2.4"/><circle cx="17" cy="9" r="2.4"/><circle cx="10" cy="17" r="2.4"/>
+        <path d="M9 8l6 .6M9 9l0 6"/></svg>
+      <span>Map</span></button>
+    <button class="railbtn" data-view="topics" title="Topics">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <rect x="3" y="4" width="8" height="7" rx="2"/><rect x="13" y="4" width="8" height="7" rx="2"/>
+        <rect x="3" y="13" width="8" height="7" rx="2"/><rect x="13" y="13" width="8" height="7" rx="2"/></svg>
+      <span>Topics</span></button>
+    <button class="railbtn" data-view="history" title="History">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+      <span>History</span></button>
+    <button class="railbtn" data-view="saved" title="Saved">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M6 4h12v16l-6-4-6 4z"/></svg>
+      <span>Saved</span></button>
+    <div class="railspace"></div>
+    <button class="railbtn" data-view="settings" title="Settings">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
+      <span>Setup</span></button>
+  </nav>
+
+  <div class="main">
+    <!-- topbar -->
+    <header class="topbar">
+      <div class="brand">
+        <h1>Neuroplasticity Explorer</h1>
+        <p>Understand your brain. Backed by science.</p>
+      </div>
+      <div class="searchwrap">
+        <input id="q" autocomplete="off"
+          placeholder="What happens when I watch excessive short-form content?">
+        <button class="searchgo" id="go" aria-label="Trace">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+            <path d="M5 12h13M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+      <button class="topchip" id="evbtn">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.6">
+          <circle cx="12" cy="12" r="9"/><path d="M12 8v.5M12 11v5"/></svg>
+        <span class="t1">Evidence guide</span>
+      </button>
+      <a class="topchip" href="/" style="text-decoration:none">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#67e8f9" stroke-width="1.6">
+          <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+        <div><div class="t1">Segmentation pipeline</div>
+             <div class="t2" id="scanmeta">T1 MPRAGE · 1.0 mm</div></div>
+        <span class="dotlive"></span>
+      </a>
+    </header>
+
+    <!-- content -->
+    <div class="content">
+      <div class="leftcol">
+        <section class="card viz">
+          <div class="cardhead" style="position:absolute;z-index:5">
+            <h2>Brain visualization <span class="info" title="Stylized region model, not an anatomical atlas">i</span></h2>
+            <p>Rotate · zoom · click a region</p>
+          </div>
+          <div id="stage"></div>
+          <svg id="leaders"></svg>
+          <div class="tools">
+            <button class="tool on" id="tSelect" title="Select"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 8-6 1.6L9.6 19z"/></svg></button>
+            <button class="tool on" id="tSpin" title="Auto-rotate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 11-2.3-5.6"/><path d="M20 4v4h-4"/></svg></button>
+            <button class="tool" id="tZoom" title="Reset view"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M9 11h4"/></svg></button>
+            <button class="tool" id="tGlow" title="Glow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></button>
+          </div>
+          <div class="player">
+            <button class="playbtn" id="playBtn"><svg id="playIco" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg></button>
+            <div class="playmeta">
+              <div class="lab">Neural activity simulation</div>
+              <div class="track" id="track"><div class="fill" id="fill" style="width:0%"></div>
+                <div class="knob" id="knob" style="left:0%"></div></div>
+            </div>
+            <div class="tcode" id="tcode">00:00 / 00:45</div>
+          </div>
+        </section>
+
+        <div class="meters">
+          <section class="card meter">
+            <h3>Impact intensity <span class="info" title="How strongly this activity engages each region">i</span></h3>
+            <div class="grad"></div>
+            <div class="scale"><span>Minimal</span><span>Mild</span><span>Moderate</span><span>High</span><span>Very high</span></div>
+          </section>
+          <section class="card meter">
+            <h3>Neural activity <span class="info" title="Illustrative signal — not recorded from a real brain">i</span></h3>
+            <canvas id="wave"></canvas>
+            <div class="scale"><span>Low activity</span><span>High activity</span></div>
+          </section>
+        </div>
+
+        <section class="card explore" id="topicsCard">
+          <h3>You might also explore</h3>
+          <div class="exgrid" id="exgrid"></div>
+        </section>
+      </div>
+
+      <aside class="rightcol card" style="padding-bottom:2px">
+        <div class="reshead">
+          <div><h2 id="resTitle">Analysis results</h2><p id="resSub">Ask a question to begin</p></div>
+          <div class="seg" id="seg">
+            <button class="on" data-mode="list">List</button>
+            <button data-mode="map">Map</button>
+          </div>
+        </div>
+        <div class="reslist" id="reslist">
+          <div class="blank">Ask what an activity does to your brain and the regions it touches
+            will <b>light up on the model</b>.<br><br>Every finding is tagged
+            <b>established</b>, <b>emerging</b>, or <b>hypothesized</b> so you can see how
+            solid the evidence actually is.</div>
+        </div>
+        <div class="disc" id="disc"></div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), leaders = $('#leaders');
+
+// ── scene ───────────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 1, 4000);
+const HOME = new THREE.Vector3(322, 58, 118);
+camera.position.copy(HOME);
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+stage.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = .06;
+controls.minDistance = 190; controls.maxDistance = 620;
+controls.autoRotate = true; controls.autoRotateSpeed = .5;
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1,1), 1.55, .78, .1);
+composer.addPass(bloom); composer.addPass(new OutputPass());
+
+function resize(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w,h); composer.setSize(w,h); bloom.resolution.set(w,h);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  leaders.setAttribute('viewBox', `0 0 ${w} ${h}`);
+}
+new ResizeObserver(resize).observe(stage);
+
+const SPRITE = (()=>{ const c=document.createElement('canvas'); c.width=c.height=64;
+  const ctx=c.getContext('2d'); const g=ctx.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.25,'rgba(255,255,255,.9)');
+  g.addColorStop(.55,'rgba(255,255,255,.25)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+
+// ── brain shape ─────────────────────────────────────────────────────────
+const G=(v,c,s)=>((v-c)/s)**2;
+function brainRadius(d){
+  const {x,y,z}=d, ax=Math.abs(x);
+  let r = 1/Math.sqrt((x/64)**2+(y/52)**2+(z/82)**2);
+  const baseFlat = .30 + .70*Math.min(1, Math.max(0,(z+.55)/.75));
+  r *= 1 - .22*Math.pow(Math.max(0,-y),1.5)*baseFlat;                        // skull base
+  r *= 1 + .34*Math.exp(-(G(ax,.78,.40)+G(y,-.40,.36)+G(z,.10,.70)));        // temporal lobe
+  r *= 1 - .13*Math.exp(-(G(ax,.88,.30)+G(y,-.02,.16)+G(z,.15,.65)));        // Sylvian fissure
+  r *= 1 + .26*Math.exp(-(G(z,-.72,.34)+G(y,-.52,.34)+G(ax,0,.80)));         // cerebellum
+  r *= 1 + .30*Math.exp(-(G(ax,0,.22)+G(z,-.12,.30)))*Math.max(0,-y)**2;     // brainstem
+  r *= 1 - .10*Math.pow(Math.max(0,z),3);                                    // frontal taper
+  r *= 1 + .05*Math.pow(Math.max(0,-z),4);                                   // occipital pole
+  r *= 1 - .20*Math.exp(-G(x,0,.12))*Math.pow(Math.max(0,y),.7);             // midline fissure
+  r *= 1 + .022*Math.sin(11*x+2.1)*Math.sin(9*y+1.3)*Math.sin(10*z);         // gyral ripple
+  return r;
+}
+function shapeGeo(detail){
+  const g=new THREE.IcosahedronGeometry(1,detail), p=g.attributes.position, v=new THREE.Vector3();
+  for(let i=0;i<p.count;i++){ v.fromBufferAttribute(p,i).normalize();
+    v.multiplyScalar(brainRadius(v)); p.setXYZ(i,v.x,v.y,v.z); }
+  g.computeVertexNormals(); return g;
+}
+function onBrain(u,v,j=0){
+  const th=Math.acos(2*u-1), ph=2*Math.PI*v;
+  const d=new THREE.Vector3(Math.sin(th)*Math.cos(ph),Math.cos(th),Math.sin(th)*Math.sin(ph));
+  return d.multiplyScalar(brainRadius(d)*(1+(Math.random()-.5)*j));
+}
+
+// translucent glass shell — fresnel rim draws the silhouette
+const RIM = new THREE.ShaderMaterial({
+  uniforms:{ uColor:{value:new THREE.Color('#a274ff')}, uPow:{value:2.4}, uStr:{value:1.0} },
+  vertexShader:`varying vec3 vN; varying vec3 vV;
+    void main(){ vN=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.);
+      vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader:`uniform vec3 uColor; uniform float uPow; uniform float uStr;
+    varying vec3 vN; varying vec3 vV;
+    void main(){ float f=pow(1.-abs(dot(normalize(vN),normalize(vV))),uPow);
+      gl_FragColor=vec4(uColor*f*uStr,f*uStr); }`,
+  transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide });
+
+const hullGeo = shapeGeo(5);
+scene.add(new THREE.Mesh(hullGeo, RIM));
+scene.add(new THREE.Mesh(hullGeo, new THREE.MeshBasicMaterial({ color:0x3a1d7d,
+  transparent:true, opacity:.15, side:THREE.BackSide, blending:THREE.AdditiveBlending,
+  depthWrite:false })));
+scene.add(new THREE.LineSegments(new THREE.WireframeGeometry(shapeGeo(3)),
+  new THREE.LineBasicMaterial({ color:0x7c5cff, transparent:true, opacity:.10,
+    blending:THREE.AdditiveBlending, depthWrite:false })));
+
+const shell = (()=>{ const N=3200, pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){ const p=onBrain(Math.random(),Math.random(),.03); pos.set([p.x,p.y,p.z],i*3); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const m=new THREE.PointsMaterial({ size:1.8,map:SPRITE,color:0x9a7cff,transparent:true,
+    opacity:.30,blending:THREE.AdditiveBlending,depthWrite:false });
+  const p=new THREE.Points(g,m); scene.add(p); return p; })();
+
+const dust = (()=>{ const N=520, pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){ const r=150+Math.random()*250, th=Math.acos(2*Math.random()-1),
+    ph=2*Math.PI*Math.random();
+    pos.set([r*Math.sin(th)*Math.cos(ph), r*Math.cos(th)*.65, r*Math.sin(th)*Math.sin(ph)],i*3); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const m=new THREE.PointsMaterial({ size:1.4,map:SPRITE,color:0x67e8f9,transparent:true,
+    opacity:.28,blending:THREE.AdditiveBlending,depthWrite:false });
+  const p=new THREE.Points(g,m); scene.add(p); return p; })();
+
+// ── regions ─────────────────────────────────────────────────────────────
+const SEV=['#facc15','#fb923c','#f43f5e','#ec4899','#d946ef'];
+const UP='#22d3ee';
+const groups=new Map(), picks=[];
+const arcGroup=new THREE.Group(); scene.add(arcGroup);
+
+function buildRegion(def){
+  const base=new THREE.Color().setHSL(def.hue/360,.85,.60);
+  const st={ id:def.id, def, base, color:base.clone(), active:false, sev:0,
+             phase:Math.random()*6.28, center:new THREE.Vector3(...def.center) };
+  const parts=[]; const signs=def.bilateral?[1,-1]:[0];
+  for(const s of signs){
+    const cx=def.center[0]*(s===0?0:s), cy=def.center[1], cz=def.center[2];
+    const [rx,ry,rz]=def.radii;
+    const N=Math.round(40+(rx*ry*rz)/240), pos=new Float32Array(N*3), pts=[];
+    for(let i=0;i<N;i++){
+      let v; do{ v=new THREE.Vector3(Math.random()*2-1,Math.random()*2-1,Math.random()*2-1);}
+      while(v.lengthSq()>1);
+      v.setLength(Math.pow(v.length(),.55));
+      const p=new THREE.Vector3(cx+v.x*rx, cy+v.y*ry, cz+v.z*rz);
+      pts.push(p); pos.set([p.x,p.y,p.z],i*3);
+    }
+    const pg=new THREE.BufferGeometry(); pg.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    const pm=new THREE.PointsMaterial({ size:3.2,map:SPRITE,transparent:true,opacity:.55,
+      color:base.clone(),blending:THREE.AdditiveBlending,depthWrite:false });
+    scene.add(new THREE.Points(pg,pm));
+    const seg=[];
+    for(let i=0;i<pts.length;i++){
+      const nb=pts.map((q,j)=>({j,d:pts[i].distanceToSquared(q)})).sort((a,b)=>a.d-b.d).slice(1,3);
+      for(const n of nb) if(n.j>i) seg.push(pts[i],pts[n.j]);
+    }
+    const lm=new THREE.LineBasicMaterial({ color:base.clone(),transparent:true,opacity:.20,
+      blending:THREE.AdditiveBlending,depthWrite:false });
+    scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(seg), lm));
+    const hit=new THREE.Mesh(new THREE.SphereGeometry(1,12,10),
+      new THREE.MeshBasicMaterial({visible:false}));
+    hit.position.set(cx,cy,cz); hit.scale.set(rx,ry,rz); hit.userData.id=def.id;
+    scene.add(hit); picks.push(hit);
+    parts.push({pm,lm});
+  }
+  groups.set(def.id,{parts,st});
+}
+function setRegion(id,{active,hex,sev}){
+  const g=groups.get(id); if(!g) return;
+  g.st.active=!!active; g.st.sev=sev||0;
+  g.st.color=new THREE.Color(active?hex:g.st.base);
+}
+function clearRegions(){ for(const id of groups.keys()) setRegion(id,{active:false});
+  arcGroup.clear(); }
+
+// sweeping tracts between affected regions, with travelling pulses
+let pulses=[];
+function buildArcs(ids){
+  arcGroup.clear(); pulses=[];
+  for(let i=0;i<ids.length-1;i++){
+    const a=groups.get(ids[i]), b=groups.get(ids[i+1]); if(!a||!b) continue;
+    const p0=a.st.center.clone(), p2=b.st.center.clone();
+    const mid=p0.clone().add(p2).multiplyScalar(.5);
+    mid.multiplyScalar(1+ .55*(1 - mid.length()/95));
+    mid.y += 26;
+    const curve=new THREE.QuadraticBezierCurve3(p0,mid,p2);
+    const g=new THREE.BufferGeometry().setFromPoints(curve.getPoints(60));
+    const m=new THREE.LineBasicMaterial({ color:new THREE.Color(a.st.color),transparent:true,
+      opacity:.55,blending:THREE.AdditiveBlending,depthWrite:false });
+    arcGroup.add(new THREE.Line(g,m));
+    const pg=new THREE.BufferGeometry();
+    pg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(3),3));
+    const pm=new THREE.PointsMaterial({ size:9,map:SPRITE,color:0xffffff,transparent:true,
+      opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false });
+    const pt=new THREE.Points(pg,pm); arcGroup.add(pt);
+    pulses.push({curve,pt,off:i*.28});
+  }
+}
+
+// ── picking ─────────────────────────────────────────────────────────────
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2();
+let hover=null;
+function pickAt(ev){
+  const r=renderer.domElement.getBoundingClientRect();
+  mouse.set(((ev.clientX-r.left)/r.width)*2-1, -((ev.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(mouse,camera);
+  return ray.intersectObjects(picks,false)[0]?.object.userData.id || null;
+}
+renderer.domElement.addEventListener('pointermove',ev=>{
+  hover=pickAt(ev);
+  renderer.domElement.style.cursor = hover?'pointer':'grab';
+});
+renderer.domElement.addEventListener('click',ev=>{
+  const id=pickAt(ev); if(!id) return;
+  const c=document.querySelector(`.rcard[data-region="${id}"]`);
+  if(c){ document.querySelectorAll('.rcard').forEach(x=>x.classList.remove('sel'));
+    c.classList.add('sel'); c.scrollIntoView({behavior:'smooth',block:'center'}); }
+});
+
+// ── callouts + leader lines ─────────────────────────────────────────────
+const SLOTS=[[.03,.13],[.66,.10],[.70,.38],[.05,.60],[.26,.80],[.62,.74]];
+let callouts=[];
+function makeCallouts(findings){
+  document.querySelectorAll('.callout').forEach(n=>n.remove());
+  leaders.innerHTML=''; callouts=[];
+  findings.slice(0,6).forEach((f,i)=>{
+    const g=groups.get(f.region); if(!g) return;
+    const el=document.createElement('div'); el.className='callout';
+    const hex=colorFor(f);
+    el.innerHTML=`<h4>${esc(g.st.def.label)}</h4><p>${esc(g.st.def.blurb)}</p>
+      <div class="imp" style="color:${hex}">${impactWord(f)}</div>`;
+    el.style.left=(SLOTS[i][0]*100)+'%'; el.style.top=(SLOTS[i][1]*100)+'%';
+    el.onclick=()=>{ const c=document.querySelector(`.rcard[data-region="${f.region}"]`);
+      if(c){ c.scrollIntoView({behavior:'smooth',block:'center'}); c.classList.add('sel'); } };
+    el.onmouseenter=()=>hover=f.region; el.onmouseleave=()=>hover=null;
+    stage.parentElement.appendChild(el);
+    const ln=document.createElementNS('http://www.w3.org/2000/svg','path');
+    ln.setAttribute('stroke',hex); ln.setAttribute('stroke-width','1'); ln.setAttribute('fill','none');
+    ln.setAttribute('opacity','.5'); leaders.appendChild(ln);
+    const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    dot.setAttribute('r','3'); dot.setAttribute('fill',hex); leaders.appendChild(dot);
+    callouts.push({el,ln,dot,id:f.region});
+    requestAnimationFrame(()=>setTimeout(()=>el.classList.add('on'), 90*i));
+  });
+}
+const proj=new THREE.Vector3();
+function layoutLeaders(){
+  const w=stage.clientWidth, h=stage.clientHeight; if(!w) return;
+  for(const c of callouts){
+    const g=groups.get(c.id); if(!g) continue;
+    proj.copy(g.st.center).project(camera);
+    const x=(proj.x*.5+.5)*w, y=(-proj.y*.5+.5)*h;
+    const r=c.el.getBoundingClientRect(), s=stage.getBoundingClientRect();
+    const cx=r.left-s.left+r.width/2, cy=r.top-s.top+r.height/2;
+    const ex=cx + (x>cx? r.width/2 : -r.width/2), ey=cy;
+    c.ln.setAttribute('d',`M${ex.toFixed(1)},${ey.toFixed(1)} L${((ex+x)/2).toFixed(1)},${ey.toFixed(1)} L${x.toFixed(1)},${y.toFixed(1)}`);
+    c.dot.setAttribute('cx',x.toFixed(1)); c.dot.setAttribute('cy',y.toFixed(1));
+    const vis = proj.z < 1;
+    c.ln.style.opacity = vis? .5:0; c.dot.style.opacity = vis? 1:0;
+  }
+}
+
+// ── simulation clock ────────────────────────────────────────────────────
+const DUR=45; let simT=0, playing=true;
+const fillEl=$('#fill'), knobEl=$('#knob'), tcodeEl=$('#tcode'), playIco=$('#playIco');
+const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0');
+$('#playBtn').onclick=()=>{ playing=!playing;
+  playIco.innerHTML = playing? '<path d="M8 5h3v14H8zM13 5h3v14h-3z"/>' : '<path d="M7 4l13 8-13 8z"/>'; };
+$('#track').onclick=e=>{ const r=e.currentTarget.getBoundingClientRect();
+  simT=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*DUR; };
+
+// ── animate ─────────────────────────────────────────────────────────────
+const clock=new THREE.Clock();
+(function loop(){
+  requestAnimationFrame(loop);
+  const dt=clock.getDelta(), t=clock.elapsedTime;
+  if(playing){ simT=(simT+dt)%DUR;
+    const p=simT/DUR; fillEl.style.width=(p*100)+'%'; knobEl.style.left=(p*100)+'%';
+    tcodeEl.textContent=fmt(simT)+' / '+fmt(DUR); }
+
+  for(const {parts,st} of groups.values()){
+    const hv = hover===st.id;
+    const pulse = st.active&&playing ? .70+.30*Math.sin(t*2.2+st.phase) : 1;
+    const base = st.active ? .58+.42*(st.sev/5) : .34;
+    for(const p of parts){
+      p.pm.color.lerp(st.color,.10); p.lm.color.lerp(st.color,.10);
+      p.pm.opacity = base*pulse*(hv?1.5:1);
+      p.lm.opacity = (st.active? .32+.34*(st.sev/5) : .16)*pulse*(hv?1.6:1);
+      p.pm.size    = (st.active? 3.7+2.6*(st.sev/5) : 3.1)*(hv?1.25:1);
+    }
+  }
+  for(const pl of pulses){
+    const u=((simT/DUR*3)+pl.off)%1;
+    const pos=pl.curve.getPoint(u);
+    pl.pt.geometry.attributes.position.setXYZ(0,pos.x,pos.y,pos.z);
+    pl.pt.geometry.attributes.position.needsUpdate=true;
+    pl.pt.material.opacity=playing? .55+.45*Math.sin(u*Math.PI) : 0;
+  }
+  dust.rotation.y=t*.012;
+  controls.update(); layoutLeaders(); composer.render();
+})();
+
+// waveform
+let REGIONS=[], activeCount=0, lastData=null, mode='list';
+const wave=$('#wave'), wctx=wave.getContext('2d');
+(function drawWave(){
+  requestAnimationFrame(drawWave);
+  const w=wave.clientWidth, h=30;
+  if(wave.width!==w) { wave.width=w; wave.height=h; }
+  wctx.clearRect(0,0,w,h);
+  const g=wctx.createLinearGradient(0,0,w,0);
+  g.addColorStop(0,'#22d3ee'); g.addColorStop(.5,'#a855f7'); g.addColorStop(1,'#ec4899');
+  wctx.strokeStyle=g; wctx.lineWidth=1.6; wctx.beginPath();
+  const amp = activeCount? 1 : .25, tt=playing? performance.now()/1000 : 0;
+  for(let x=0;x<w;x++){
+    const n=Math.sin(x*.09+tt*3)*.5 + Math.sin(x*.23-tt*2)*.3 + Math.sin(x*.41+tt*5)*.2;
+    const y=h/2 + n*h*.34*amp;
+    x?wctx.lineTo(x,y):wctx.moveTo(x,y);
+  }
+  wctx.stroke();
+})();
+
+// ── data / rendering ────────────────────────────────────────────────────
+const XY={prefrontal_cortex:[24,32],orbitofrontal_cortex:[22,48],anterior_cingulate:[42,28],
+  motor_cortex:[50,20],somatosensory_cortex:[58,22],parietal_cortex:[68,28],visual_cortex:[82,38],
+  temporal_auditory:[42,56],hippocampus:[52,52],amygdala:[40,50],striatum:[44,38],
+  thalamus:[54,38],insula:[46,44],cerebellum:[76,58],brainstem:[62,64]};
+const OUTLINE="M78 20C86 26 90 36 86 46C90 52 86 60 78 60C74 68 62 70 54 66C46 72 34 70 28 62C16 60 10 50 14 40C10 30 18 20 30 18C38 10 52 8 60 14C66 12 74 14 78 20Z";
+
+const colorFor = f => f.direction==='strengthen' ? UP : SEV[Math.min(4,(f.severity||3)-1)];
+const impactWord = f => f.direction==='strengthen' ? 'Strengthens'
+  : ['Minimal','Mild','Moderate','High','Very high'][Math.min(4,(f.severity||3)-1)]+' impact';
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function miniBrain(regionId,hex){
+  const p=XY[regionId]||[50,40];
+  return `<svg width="54" height="43" viewBox="0 0 100 80">
+    <path d="${OUTLINE}" fill="rgba(120,90,220,.10)" stroke="rgba(160,130,255,.45)" stroke-width="1.6"/>
+    <ellipse cx="80" cy="62" rx="11" ry="8" fill="none" stroke="rgba(160,130,255,.35)" stroke-width="1.2"/>
+    <circle cx="${p[0]}" cy="${p[1]}" r="9" fill="${hex}" opacity=".22"/>
+    <circle cx="${p[0]}" cy="${p[1]}" r="4" fill="${hex}"/></svg>`;
+}
+
+// bookmarks + history live in the browser
+const store={
+  get:k=>{ try{return JSON.parse(localStorage.getItem(k)||'[]')}catch{return []} },
+  set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)),
+};
+const keyOf=(t,f)=>t+'||'+f.region;
+
+fetch('/api/brain/regions').then(r=>r.json()).then(d=>{
+  REGIONS=d.regions; REGIONS.forEach(buildRegion); resize();
+  $('#scanmeta').textContent = d.engine==='hybrid'
+    ? 'Curated + AI · '+REGIONS.length+' regions' : 'Curated · '+REGIONS.length+' regions';
+  const ic=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>`;
+  $('#exgrid').innerHTML = d.suggestions.map(s=>{
+    const short=s.replace(/^What happens to my brain when |^What does |^How does /,'')
+                 .replace(/\?$/,'').replace(/ do to my brain$| change my brain$| rewire my brain$/,'');
+    return `<button class="excard" data-q="${esc(s)}"><span class="exic">${ic}</span>
+      <span><span class="n">${esc(short[0].toUpperCase()+short.slice(1))}</span></span></button>`;
+  }).join('');
+  $('#exgrid').querySelectorAll('.excard').forEach(b=>
+    b.onclick=()=>{ $('#q').value=b.dataset.q; ask(); });
+});
+
+async function ask(){
+  const q=$('#q').value.trim() || $('#q').placeholder;
+  $('#go').disabled=true;
+  $('#reslist').innerHTML=`<div class="blank"><span class="spinner"></span>Tracing the circuits…</div>`;
+  try{
+    const fd=new FormData(); fd.append('question',q);
+    const r=await fetch('/api/brain/ask',{method:'POST',body:fd});
+    if(!r.ok) throw new Error((await r.json()).detail||'request failed');
+    const data=await r.json(); data.q=q; lastData=data;
+    const h=store.get('nx_history').filter(x=>x.q!==q); h.unshift({q,title:data.title,n:(data.findings||[]).length});
+    store.set('nx_history',h.slice(0,20));
+    render(data);
+  }catch(e){ $('#reslist').innerHTML=`<div class="blank">Couldn't answer that: ${esc(e.message)}</div>`; }
+  $('#go').disabled=false;
+}
+$('#go').onclick=ask;
+$('#q').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); ask(); } });
+
+function render(data){
+  clearRegions();
+  const F=data.findings||[]; activeCount=F.length;
+  F.forEach(f=>setRegion(f.region,{active:true,hex:colorFor(f),sev:f.severity}));
+  buildArcs(F.map(f=>f.region));
+  makeCallouts(F);
+  $('#resTitle').textContent = data.title || 'Analysis results';
+  $('#resSub').textContent = F.length
+    ? `${F.length} region${F.length>1?'s':''} most affected` : 'No regions matched';
+  setMode(mode, data);
+  $('#disc').textContent='Educational visualization — not diagnostic and not medical advice. '
+    +'Regions are stylized approximations. Neuroplasticity runs both ways: these are tendencies, not permanent damage.';
+  // swing toward the most affected region
+  const first=F[0]&&groups.get(F[0].region);
+  if(first){ const c=first.st.center;
+    const to=new THREE.Vector3(Math.abs(c.x)+250, c.y+70, c.z+150);
+    const from=camera.position.clone(), t0=performance.now();
+    (function fly(){ const k=Math.min(1,(performance.now()-t0)/1000);
+      camera.position.lerpVectors(from,to,1-Math.pow(1-k,3));
+      if(k<1) requestAnimationFrame(fly); })();
+  }
+}
+
+function cardHTML(f,data){
+  const g=groups.get(f.region); const hex=colorFor(f);
+  const saved=store.get('nx_saved').some(s=>s.k===keyOf(data.title,f));
+  return `<article class="rcard" data-region="${f.region}" style="--c:${hex}">
+    <div class="body">
+      <div class="rtop"><span class="rdot"></span><span class="rname">${esc(g?g.st.def.label:f.region)}</span>
+        <span class="badge">${esc(impactWord(f))}</span></div>
+      <div class="rhead">${esc(f.effect)}</div>
+      <div class="rdesc">${esc(f.mechanism)}</div>
+      <div class="rfoot">
+        <span class="ev ${f.confidence}">${evIcon(f.confidence)}${esc(f.confidence)} evidence</span>
+        <button class="bmk ${saved?'on':''}" data-k="${esc(keyOf(data.title,f))}" title="Save">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="${saved?'currentColor':'none'}"
+               stroke="currentColor" stroke-width="1.7"><path d="M6 4h12v16l-6-4-6 4z"/></svg></button>
+      </div>
+    </div>
+    <div class="thumb">${miniBrain(f.region,hex)}</div>
+    <span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg></span>
+  </article>`;
+}
+const evIcon=c=>c==='established'
+  ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>`
+  : c==='emerging'
+  ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v4M12 21v-4M3 12h4M21 12h-4"/><circle cx="12" cy="12" r="3"/></svg>`
+  : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/></svg>`;
+
+function mapHTML(data){
+  const F=data.findings||[];
+  const dots=F.map(f=>{ const p=XY[f.region]||[50,40], hex=colorFor(f);
+    return `<circle cx="${p[0]}" cy="${p[1]}" r="${3+ (f.severity||3)}" fill="${hex}" opacity=".2"/>
+            <circle cx="${p[0]}" cy="${p[1]}" r="3.2" fill="${hex}"/>`; }).join('');
+  const legend=F.map(f=>{ const g=groups.get(f.region);
+    return `<div class="rfoot" style="margin:0 0 6px"><span class="rdot" style="--c:${colorFor(f)};background:${colorFor(f)};box-shadow:0 0 8px ${colorFor(f)}"></span>
+      <span style="font-size:12px">${esc(g?g.st.def.label:f.region)}</span>
+      <span class="ev ${f.confidence}" style="margin-left:auto">${esc(impactWord(f))}</span></div>`; }).join('');
+  return `<div style="padding:6px 2px 10px">
+    <svg viewBox="0 0 100 80" style="width:100%;max-height:210px;display:block;margin-bottom:12px">
+      <path d="${OUTLINE}" fill="rgba(120,90,220,.09)" stroke="rgba(160,130,255,.45)" stroke-width="1.4"/>
+      <ellipse cx="80" cy="62" rx="11" ry="8" fill="none" stroke="rgba(160,130,255,.32)" stroke-width="1.1"/>
+      <path d="M62 66 q2 8 -2 12" fill="none" stroke="rgba(160,130,255,.32)" stroke-width="1.1"/>
+      ${dots}</svg>${legend}</div>`;
+}
+
+function setMode(m,data){
+  mode=m; document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+  const d=data||lastData; if(!d) return;
+  const F=d.findings||[];
+  let html = m==='map' ? mapHTML(d) : F.map(f=>cardHTML(f,d)).join('');
+  if(!F.length) html=`<div class="blank">${esc(d.summary||'No regions matched.')}</div>`;
+  if(d.summary && F.length) html = `<p class="rdesc" style="margin-bottom:4px">${esc(d.summary)}</p>` + html;
+  if(d.note) html += `<section class="card notecard" style="margin-top:4px">
+      <h3>${evIcon('established')} What the research actually says</h3>
+      <p>${esc(d.note)}</p></section>`;
+  $('#reslist').innerHTML=html;
+  wireCards(d);
+}
+function wireCards(d){
+  $('#reslist').querySelectorAll('.rcard').forEach(c=>{
+    c.onmouseenter=()=>hover=c.dataset.region; c.onmouseleave=()=>hover=null;
+    c.onclick=e=>{ if(e.target.closest('.bmk')) return;
+      document.querySelectorAll('.rcard').forEach(x=>x.classList.remove('sel'));
+      c.classList.add('sel'); };
+  });
+  $('#reslist').querySelectorAll('.bmk').forEach(b=>{
+    b.onclick=e=>{ e.stopPropagation();
+      const k=b.dataset.k, cur=store.get('nx_saved');
+      const i=cur.findIndex(s=>s.k===k);
+      if(i>=0) cur.splice(i,1);
+      else { const f=(d.findings||[]).find(f=>keyOf(d.title,f)===k);
+             cur.unshift({k,title:d.title,region:f.region,effect:f.effect,
+                          severity:f.severity,confidence:f.confidence,direction:f.direction}); }
+      store.set('nx_saved',cur); b.classList.toggle('on');
+      b.querySelector('svg').setAttribute('fill', b.classList.contains('on')?'currentColor':'none');
+    };
+  });
+}
+$('#seg').onclick=e=>{ const b=e.target.closest('button'); if(b) setMode(b.dataset.mode); };
+
+// ── rail views ──────────────────────────────────────────────────────────
+$('.rail').addEventListener('click',e=>{
+  const b=e.target.closest('.railbtn'); if(!b) return;
+  document.querySelectorAll('.railbtn').forEach(x=>x.classList.toggle('on',x===b));
+  const v=b.dataset.view;
+  if(v==='explore'){ if(lastData) setMode('list',lastData); }
+  if(v==='map'){ if(lastData) setMode('map',lastData);
+    else $('#reslist').innerHTML=`<div class="blank">Ask a question first — the map plots the affected regions.</div>`; }
+  if(v==='topics'){ $('#topicsCard').scrollIntoView({behavior:'smooth',block:'nearest'});
+    $('#topicsCard').animate([{boxShadow:'0 0 0 0 rgba(168,85,247,0)'},
+      {boxShadow:'0 0 0 3px rgba(168,85,247,.45)'},{boxShadow:'0 0 0 0 rgba(168,85,247,0)'}],
+      {duration:1100}); }
+  if(v==='history'){
+    const h=store.get('nx_history');
+    $('#resTitle').textContent='History'; $('#resSub').textContent=`${h.length} question${h.length===1?'':'s'} this browser`;
+    $('#reslist').innerHTML = h.length ? h.map(x=>
+      `<article class="rcard" style="--c:#a855f7" data-q="${esc(x.q)}"><div class="body">
+        <div class="rhead">${esc(x.title||x.q)}</div><div class="rdesc">${esc(x.q)}</div></div>
+        <span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg></span></article>`
+      ).join('') : `<div class="blank">Nothing yet. Questions you ask are kept in this browser only.</div>`;
+    $('#reslist').querySelectorAll('.rcard').forEach(c=>c.onclick=()=>{ $('#q').value=c.dataset.q; ask(); });
+  }
+  if(v==='saved'){
+    const s=store.get('nx_saved');
+    $('#resTitle').textContent='Saved findings'; $('#resSub').textContent=`${s.length} saved`;
+    $('#reslist').innerHTML = s.length ? s.map(x=>{
+      const hex=x.direction==='strengthen'?UP:SEV[Math.min(4,(x.severity||3)-1)];
+      const g=groups.get(x.region);
+      return `<article class="rcard" style="--c:${hex}"><div class="body">
+        <div class="rtop"><span class="rdot"></span><span class="rname">${esc(g?g.st.def.label:x.region)}</span></div>
+        <div class="rhead">${esc(x.effect)}</div><div class="rdesc">From: ${esc(x.title)}</div></div>
+        <div class="thumb">${miniBrain(x.region,hex)}</div></article>`;
+    }).join('') : `<div class="blank">No saved findings yet. Tap the bookmark on any result to keep it here.</div>`;
+  }
+  if(v==='settings'){
+    $('#resTitle').textContent='Setup'; $('#resSub').textContent='Display and motion';
+    $('#reslist').innerHTML=`
+      <label class="rcard" style="--c:#a855f7;align-items:center;gap:10px">
+        <input type="checkbox" id="sSpin" ${controls.autoRotate?'checked':''}>
+        <div class="body"><div class="rhead">Auto-rotate</div>
+          <div class="rdesc">Slowly turns the model so you see it from every side.</div></div></label>
+      <label class="rcard" style="--c:#22d3ee;align-items:center;gap:10px">
+        <input type="checkbox" id="sGlow" checked>
+        <div class="body"><div class="rhead">Glow</div>
+          <div class="rdesc">Bloom around active regions. Turn off if the view feels too bright.</div></div></label>
+      <label class="rcard" style="--c:#fbbf24;align-items:center;gap:10px">
+        <input type="checkbox" id="sLabels" checked>
+        <div class="body"><div class="rhead">Region labels</div>
+          <div class="rdesc">Callout cards pinned around the model.</div></div></label>
+      <button class="rcard" style="--c:#f43f5e" id="sClear"><div class="body">
+        <div class="rhead">Clear history and saved findings</div>
+        <div class="rdesc">Removes everything this browser has stored. Can't be undone.</div></div></button>`;
+    $('#sSpin').onchange=e=>{ controls.autoRotate=e.target.checked; $('#tSpin').classList.toggle('on',e.target.checked); };
+    $('#sGlow').onchange=e=>{ bloom.strength=e.target.checked?1.55:0; $('#tGlow').classList.toggle('on',!e.target.checked); };
+    $('#sLabels').onchange=e=>document.querySelectorAll('.callout')
+      .forEach(n=>n.style.display=e.target.checked?'':'none');
+    $('#sClear').onclick=()=>{ localStorage.removeItem('nx_history'); localStorage.removeItem('nx_saved');
+      $('#resSub').textContent='Cleared'; };
+  }
+});
+
+// viewport tools
+$('#tSpin').onclick=e=>{ controls.autoRotate=!controls.autoRotate;
+  e.currentTarget.classList.toggle('on',controls.autoRotate); };
+$('#tZoom').onclick=()=>{ const from=camera.position.clone(), t0=performance.now();
+  (function fly(){ const k=Math.min(1,(performance.now()-t0)/700);
+    camera.position.lerpVectors(from,HOME,1-Math.pow(1-k,3));
+    controls.target.set(0,0,0); if(k<1) requestAnimationFrame(fly); })(); };
+$('#tGlow').onclick=e=>{ const on=bloom.strength>0; bloom.strength=on?0:1.55;
+  e.currentTarget.classList.toggle('on',!on); };
+$('#evbtn').onclick=()=>{
+  $('#resTitle').textContent='Evidence guide'; $('#resSub').textContent='How to read the tags';
+  $('#reslist').innerHTML=`
+    <article class="rcard" style="--c:#6ee7b7"><div class="body">
+      <div class="rtop"><span class="rdot"></span><span class="rname">Established</span></div>
+      <div class="rdesc">Replicated in humans across multiple independent studies. You can rely on
+        the direction of the effect, though the size still varies between people.</div></div></article>
+    <article class="rcard" style="--c:#fcd34d"><div class="body">
+      <div class="rtop"><span class="rdot"></span><span class="rname">Emerging</span></div>
+      <div class="rdesc">Real evidence exists but it is young, often cross-sectional, and the causal
+        direction may not be settled. Treat it as a well-supported lead, not a fact.</div></div></article>
+    <article class="rcard" style="--c:#c4b5fd"><div class="body">
+      <div class="rtop"><span class="rdot"></span><span class="rname">Hypothesized</span></div>
+      <div class="rdesc">A plausible mechanism that follows from what we know, but has not been
+        demonstrated directly for this activity.</div></div></article>
+    <div class="blank" style="text-align:left">Impact ratings describe how strongly a region is
+      engaged, not how damaged it is. <b>Cyan</b> marks regions an activity strengthens.</div>`;
+};
+
+window.__brain={scene,camera,renderer,groups,brainRadius,hullGeo,
+  state:()=>[...groups.values()].map(g=>({id:g.st.id,active:g.st.active,
+    color:'#'+g.st.color.getHexString(),op:+g.parts[0].pm.opacity.toFixed(2)}))};
+</script>
+</body>
+</html>

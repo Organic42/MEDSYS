@@ -1,0 +1,29 @@
+# keep build context small & free of PHI / large artifacts
+.git
+.github
+.claude
+__pycache__
+*.pyc
+.pytest_cache
+
+# runtime data
+output/
+_uploads/
+_nifti/
+_work/
+*.db
+*.db-wal
+*.db-shm
+
+# model checkpoints (mounted or downloaded at runtime)
+*.pth
+
+# patient data (PHI — never bake into an image)
+dicom_data/
+*.IMA
+*.dcm
+
+# scratch
+regen_mesh.py
+run_totalseg.py
+_body.json
