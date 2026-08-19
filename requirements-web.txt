@@ -1,0 +1,32 @@
+# Lightweight deployment set — used by the hosted free-tier demo.
+# Excludes torch / TotalSegmentator / segment-anything / Redis+RQ / dicom2nifti
+# to keep the image small and within free-tier CPU/RAM limits.
+#
+# What this means for the hosted demo:
+#   - CT chest, MRI brain (BET + tissue classification), and PET tumor
+#     pipelines all work fully.
+#   - MedSAM refinement is skipped automatically (no checkpoint shipped) —
+#     the pipeline falls back to BET-only masks, same as --no-medsam.
+#   - The "AI organs (TotalSegmentator)" engine is unavailable; the UI hides
+#     it when this deployment is detected (see app.py capabilities check).
+#   - Job queue runs in-process (no Redis) — fine for single-instance hosting.
+#
+# For the full pipeline (all engines, GPU), use requirements-full.txt instead.
+
+pydicom>=2.4.0
+numpy>=1.24.0
+scipy>=1.10.0
+scikit-image>=0.21.0
+matplotlib>=3.7.0
+pyvista>=0.42.0
+SimpleITK>=2.3.0
+brainextractor>=0.3.0
+nibabel>=5.0.0
+PyWavelets>=1.4.0
+meshio>=5.3.0
+scikit-learn>=1.3.0
+fastapi>=0.110.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9
+# Neuroplasticity Explorer — optional; without it the page serves curated topics only
+anthropic>=0.40.0

@@ -1,6 +1,23 @@
-# VR-Segmentation
+---
+title: MEDSYS
+emoji: 🧠
+colorFrom: purple
+colorTo: blue
+sdk: docker
+dockerfile: Dockerfile.web
+app_port: 7860
+pinned: false
+license: mit
+---
+
+# MEDSYS
 
 A **modality-aware** medical-image segmentation pipeline that turns raw DICOM scans into VR-ready 3D meshes and volumetric analysis. It auto-detects scan type and routes to the right workflow — each dataset writes all images and 3D models into its own `output/<dataset_name>/` folder.
+
+> **Hosted demo:** this repo deploys as-is on [Hugging Face Spaces](https://huggingface.co/new-space)
+> (Docker SDK) using `Dockerfile.web` — a lightweight build (no torch/TotalSegmentator/Redis) sized
+> for the free CPU tier. See **Hosting** below. The YAML block above is Spaces config; it's ignored
+> everywhere else.
 
 Two engines:
 - **Heuristic** (default, no GPU needed) — fast classical pipelines per modality
@@ -78,6 +95,30 @@ Browser ── POST /api/upload ──▶ API (FastAPI) ──enqueue──▶ R
 
 **Local dev** (no Redis needed): `python app.py` uses the in-process bounded pool and the
 same SQLite store. Setting `REDIS_URL` switches to the queue path automatically.
+
+### Free-tier hosting (Hugging Face Spaces)
+
+For a public demo anyone can open in a browser, this repo ships `Dockerfile.web` +
+`requirements-web.txt` — a trimmed build (no torch / TotalSegmentator / Redis) sized for
+Hugging Face's free CPU tier (2 vCPU, 16 GB RAM, no card required):
+
+1. Go to **[huggingface.co/new-space](https://huggingface.co/new-space)**, sign in (or create a
+   free account).
+2. **SDK: Docker** → template **"Blank"**. Name it (e.g. `medsys`). Keep it **Public**.
+3. In **Settings → Space hardware**, confirm it's on the free **CPU basic** tier.
+4. Link it to this GitHub repo: **Settings → Repository → "Sync from GitHub"**, point it at
+   `Organic42/MEDSYS`, branch `main`. (Or push directly: `git remote add space
+   https://huggingface.co/spaces/<you>/medsys && git push space main` using a Space access
+   token as the password.)
+5. The Space reads the YAML block at the top of this README automatically — it already
+   points the build at `Dockerfile.web` and port `7860`. Build takes a few minutes; the
+   Space is live at `https://huggingface.co/spaces/<you>/medsys` once it turns green.
+
+What's different on this deployment: MedSAM refinement and the TotalSegmentator ("AI organs")
+engine are unavailable (no checkpoint/torch shipped) — the UI detects this via
+`GET /api/capabilities` and disables that option automatically. CT, MRI brain (BET + tissue
+classification), and PET tumor pipelines all work fully. Storage is ephemeral: uploads and
+results reset if the Space restarts, which is expected for a public test instance.
 
 ---
 
