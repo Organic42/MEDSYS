@@ -120,6 +120,30 @@ engine are unavailable (no checkpoint/torch shipped) — the UI detects this via
 classification), and PET tumor pipelines all work fully. Storage is ephemeral: uploads and
 results reset if the Space restarts, which is expected for a public test instance.
 
+### Standalone Windows build (send it to a friend)
+
+For testing without any hosting at all, MEDSYS also builds into a self-contained Windows
+folder — no Python install required on the machine running it.
+
+```bash
+pip install -r requirements-web.txt -r requirements-build.txt
+python -m PyInstaller medsys.spec --noconfirm
+```
+
+Output lands in `dist/MEDSYS/`. Zip that folder and send it — the recipient unzips it
+anywhere and double-clicks `MEDSYS.exe`; it starts the server and opens the UI in their
+browser automatically. Same lite feature set as the hosted demo (no MedSAM/TotalSegmentator).
+
+**Why a `medsys.spec` file and an `entry.py` instead of just `pyinstaller app.py`:** the app
+normally runs each segmentation job as a `python segmentation_pipeline.py ...` *subprocess* —
+but a frozen `.exe` has no separate interpreter to hand a script to (`sys.executable` **is**
+the exe). `entry.py` is the actual PyInstaller entry point; it re-invokes the exe itself with
+a `--run-pipeline` flag when a job needs to run, and dispatches straight into
+`segmentation_pipeline.main()` instead of starting the server. `config.py` resolves data
+paths (output/uploads/job DB) relative to the exe's own folder when frozen, not the
+PyInstaller bundle's internal resource directory, so results always land somewhere the user
+can actually find them.
+
 ---
 
 ## Multi-Dataset Usage

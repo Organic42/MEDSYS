@@ -10,10 +10,24 @@ import jobstore
 PIPELINE = os.path.join(config.PROJECT_DIR, 'segmentation_pipeline.py')
 
 
+def _base_cmd():
+    """Command prefix that re-invokes the pipeline as a subprocess.
+
+    Normal Python run: `python -u segmentation_pipeline.py`.
+    Frozen .exe: there is no separate interpreter to hand a .py file to —
+    sys.executable IS the .exe — so we re-launch the exe itself with a
+    dispatch flag; entry.py checks for that flag and calls
+    segmentation_pipeline.main() directly instead of starting the server.
+    """
+    if config.FROZEN:
+        return [config.EXE_PATH, '--run-pipeline']
+    return [sys.executable, '-u', PIPELINE]
+
+
 def run_segmentation(job_id, input_dir, name, modality=None,
                      no_medsam=False, engine='heuristic'):
     jobstore.update(job_id, status='running', message='Starting pipeline...')
-    cmd = [sys.executable, '-u', PIPELINE, '--input', input_dir, '--name', name]
+    cmd = _base_cmd() + ['--input', input_dir, '--name', name]
     if modality:
         cmd += ['--modality', modality]
     if no_medsam:
