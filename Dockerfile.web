@@ -2,7 +2,7 @@
 # Excludes torch / TotalSegmentator / Redis+RQ — see requirements-web.txt.
 # For the full pipeline (all engines, GPU, production queue) use the root
 # Dockerfile + docker-compose.yml instead.
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONIOENCODING=utf-8 \
