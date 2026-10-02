@@ -1,0 +1,242 @@
+RISK-AWARE AUTOMATED DICOM-TO-3D RECONSTRUCTION:
+RESEARCH GAPS, QUESTIONS AND STUDY DESIGN
+MEDSYS project | v3.2, revised after four external reviews | [Your Name]
+Supervisor: [Supervisor Name] | [Department, University] | October 2026
+=====================================================================================
+
+THESIS
+This research develops a risk-aware framework for automated DICOM-to-3D anatomical
+reconstruction that quantifies stage-wise geometric error, predicts final-mesh reliability
+without ground truth, and selects reconstruction pipelines subject to task-specific
+accuracy and computational constraints.
+
+CONTEXT
+MEDSYS already runs end to end (Section 1), so the contribution is not the platform but
+the reliability of its output: MEASURE -> PREDICT -> DECIDE.
+
+METHOD AND LIMITS
+About 30 web searches (October 2026), a code audit of the repository at commit 130686f,
+two external reviews, and direct reading of selected primary sources, marked (+).
+Unmarked references come from search summaries or background knowledge and must be
+verified before citing. This is a scoping note; a logged systematic search must confirm
+novelty.
+
+
+1. CURRENT STATE OF MEDSYS
+
+CT: intensity-threshold heuristic or TotalSegmentator [1], built on nnU-Net [2], run in
+its 3 mm fast mode by default.
+MRI: N4, denoising, BET and box-prompted MedSAM refinement of the BET mask (when the
+checkpoint is present), then Gaussian-mixture tissue classes.
+PET: tumour-to-background hotspot.
+Every route meshes through one function: Gaussian blur of the mask, marching cubes,
+Taubin smoothing (30 iterations) and decimation, with blur and decimation strengths
+hand-tuned per structure (sigma 0.5-1.0, reduction 0.3-0.6).
+Validation to date: Dice, IoU, HD95 and ASSD of the heuristic engine against
+TotalSegmentator in fast mode on CPU, on one chest CT (lungs 0.95, skeleton 0.11). This measures agreement
+with TotalSegmentator, not anatomical accuracy; it is pilot evidence motivating the
+research problem, not evidence about either engine.
+
+
+2. SCIENTIFIC GAPS AND RESEARCH QUESTIONS
+
+A1 - Stage-wise attribution of geometric error
+  Error sources in patient-specific 3D models are well characterised, with segmentation
+  error dominating printing error [3, 4], and smoothing is known to alter geometry [5].
+  There is limited evidence for automated, quantitative, stage-wise attribution in
+  end-to-end DICOM-to-mesh pipelines that compares segmentation engines and
+  reconstruction choices, including their interactions, across multiple structures
+  against expert ground truth.
+  RQ1 (MEASURE): Which pipeline stages, and which interactions between them, contribute
+  most to final anatomical geometric error?
+
+A2 - Ground-truth-free, task-specific mesh reliability
+  Segmentation-level quality control without ground truth is crowded [6, 7, 8]. Less
+  explored is bounding final-mesh error. Operationally: predict an upper bound U(x) for
+  ASSD, HD95 and volume error such that P(E_mesh <= U(x)) >= 1 - alpha holds empirically
+  on held-out cases, using split conformal prediction [9]; task suitability is then
+  P(E_mesh <= tau_task) for VR, measurement or printing. A2 differs materially from
+  segmentation QC only if RQ1 shows that reconstruction stages or topology contribute
+  non-trivially.
+  RQ2 (PREDICT): Can final-mesh error and task suitability be predicted without ground
+  truth at inference time, with empirically calibrated coverage?
+
+A3 - Accuracy-constrained pipeline selection
+  Adaptive inference and deferral exist [10, 11, 12], so routing easy cases to a cheap
+  engine is not novel. The open formulation chooses engine and reconstruction settings p
+  that minimise cost subject to a reliability target, with energy [13] as a cost term
+  rather than the thesis:
+
+      p* = argmin_p [ energy(p) + lambda * latency(p) ]
+           subject to  P( E_mesh(p) <= tau_task ) >= 1 - alpha
+
+  RQ3 (DECIDE): Can RQ2's bounds select the lowest-cost pipeline that satisfies a
+  predefined task-specific reliability constraint?
+  Priority: RQ1 is the core thesis and stands on its own; RQ2 is the major extension and
+  RQ3 the applied extension, each built only on its predecessor's results.
+
+
+3. REFERENCE STANDARD
+
+- Three distinct objects:
+    Ground truth: an expert-annotated mask from a public dataset. It is a reference
+      standard rather than truth, since inter-rater variability sets a floor [14].
+    Reference surface: a mesh made from that mask by one fixed, documented procedure
+      (marching cubes at native resolution, no smoothing or decimation).
+    Test mesh: MEDSYS output under configuration p.
+  Error is always test mesh against reference surface.
+- Tier 1, digital phantoms: analytic surfaces voxelised at the study's spacings. This
+  isolates reconstruction error exactly and measures the reference procedure's own
+  error, which becomes the floor below which Tier 2 differences are not interpretable.
+- Tier 2, human anatomy: end-to-end error against expert annotations.
+
+
+4. STUDY DESIGN
+
+- Structures by regime, CT first: high contrast (lung, bone), low contrast (liver) and,
+  optionally, thin structures (vessels), from public expert-labelled datasets
+  [15, 16, 17]; brain MRI is an extension once RQ1 runs on CT, and PET is out of scope
+  (no labelled PET ground truth).
+  Leakage and label bias: evaluate TotalSegmentator only on a held-out split or external
+  data, and check how each dataset's labels were made, since model-assisted labels can
+  favour the model family that produced them. Licences differ by dataset.
+- Configurations:
+    Production parameters (what MEDSYS ships: TotalSegmentator fast mode, blur and
+      decimation hand-tuned per structure) appear in results as one named configuration
+      only.
+    Research experiments use one uniform grid for every structure, with no
+      per-structure tuning.
+    Canonical baseline: TotalSegmentator at 1.5 mm, native spacing, no blur, marching
+      cubes, no smoothing, no decimation. Every effect is reported as a change from it.
+      With the expert mask in place of the engine, it is exactly the reference-surface
+      procedure.
+- Exp. A, segmentation: heuristic, TotalSegmentator 3 mm (fast) and TotalSegmentator
+  1.5 mm (full) against expert labels; BET+MedSAM only in the MRI extension.
+- Exp. B, reconstruction (causal isolation): hold the segmentation fixed and intervene
+  only on spacing and four explicit factors, all fixed before analysis:
+    mask blur sigma in {0, 0.5, 1} mm (millimetres, so blur is not confounded with
+      spacing)
+    isosurface algorithm (two variants)
+    Taubin smoothing iterations in {0, 10, 30, 60}
+    decimation in {0, 0.25, 0.5, 0.75}
+  Run on the expert mask (pure reconstruction effect) and on each engine's mask (does
+  reconstruction amplify or dampen segmentation error?).
+- Exp. C, full pipeline: DICOM -> engine -> mesh against the reference surface.
+- Exp. D, attribution, split-plot design [18]: expensive whole-plot factors are engine x
+  resolution (3x4 = 12 segmentations per case); cheap sub-plot factors are blur x
+  isosurface x smoothing x decimation (3x2x4x4 = 96 meshes per segmentation), so 1,152
+  meshes per case-structure. Unless the pilot shows the full set is affordable, run the
+  full grid on a subset (e.g. 20 cases) and the canonical and production configurations
+  on all cases. Fit a mixed-effects model with
+  case and structure as random effects, and compute Sobol indices for the continuous
+  reconstruction parameters [19]. Time a 2-3 case pilot first; if the full design is too
+  costly, fall back to a fractional factorial that keeps two-factor interactions
+  unaliased (resolution V) or a response-surface design.
+- Sample size is set by RQ2. At alpha = 0.05, split conformal prediction needs at least
+  19 calibration cases per group for a finite bound, and stable coverage needs more [9].
+  With per-structure calibration plus training and test splits, plan on roughly 60-100
+  cases per structure, to be confirmed against pilot variability. For RQ1, choose n so
+  that the confidence-interval half-width h on mean ASSD is acceptable:
+  n ~= (1.96 s / h)^2, e.g. a pilot SD s = 1 mm and h = 0.3 mm gives about 43
+  (illustrative).
+- Accuracy and cost are separate experiments. Experiments A-D measure geometry only and
+  do not depend on hardware. Latency and energy are measured in a separate benchmark on
+  fixed, documented hardware and combined only in RQ3. The device is recorded with every
+  run, since GPU non-determinism can perturb segmentations slightly.
+- Metrics, chosen per Metrics Reloaded [14], reported per case with confidence
+  intervals: surface (ASSD, HD95, surface Dice [20], Chamfer), geometric (volume and
+  surface-area error) and topological (components, holes, self-intersections). Task
+  tolerances come from literature or clinicians and are fixed before analysis.
+- Output: every mesh ships with a JSON or glTF-extras quality report giving U(x) and
+  P(E_mesh <= tau_task) for each task, since STL cannot carry metadata.
+
+MAIN RISKS AND MITIGATIONS
+- Size of the design space: pilot timing; full grid on a subset, or a fractional design.
+- Too few independent expert-labelled cases for RQ2: CT-first scope; pooled public
+  datasets.
+- Reference-standard discipline: one fixed, documented procedure; Tier 1 floor.
+- Scope creep: RQ1 first; MRI only as an extension; PET out.
+
+
+5. ENGINEERING PREREQUISITES (not contributions)
+
+Expert-ground-truth validation harness; a configuration layer separating production
+defaults from research grids (reconstruction parameters are currently hard-coded at each
+call site); GPU inference (the installed PyTorch build is
+CPU-only); benchmarking BET+MedSAM against HD-BET [21]; verified de-identification and
+opaque dataset identifiers [22], since datasets are currently named from upload
+filenames; a provenance record (model version, weights hash, commit) on every output;
+multi-series handling.
+
+
+6. COMMERCIALISATION AND DEPLOYMENT CONSTRAINTS
+
+Diagnostic-use anatomical models are expected to come from cleared software held by
+incumbents [23], so early use is teaching, research and non-diagnostic planning. Several
+TotalSegmentator subtasks need a commercial licence, while "total" and "total_mr" are
+Apache-2.0 [24]. EU high-risk AI duties for AI in medical devices apply from 2 Aug 2028
+[25]; the FDA's AI-enabled device list is dominated by radiology [26], and a June 2026
+rule classifies radiological ML-based quantitative imaging software [27]. A student
+project can produce regulatory-ready documentation, not clearance.
+
+
+REFERENCES   ((+) = read directly from the primary source)
+
+[1]  J. Wasserthal et al., "TotalSegmentator: robust segmentation of 104 anatomic
+     structures in CT images," Radiology: Artificial Intelligence, 2023.
+     https://doi.org/10.1148/ryai.230024
+[2]  F. Isensee et al., "nnU-Net: a self-configuring method for deep learning-based
+     biomedical image segmentation," Nature Methods, 2021.
+[3]  "Quality assurance of 3D-printed patient specific anatomical models: a systematic
+     review," 2024. https://www.researchgate.net/publication/379332555
+[4]  "Insights into geometric deviations of medical 3D-printing: a phantom study
+     utilizing error propagation analysis," 3D Printing in Medicine, 2024.
+     https://doi.org/10.1186/s41205-024-00242-x
+[5]  R. Bade, J. Haase, B. Preim, "Comparison of fundamental mesh smoothing algorithms
+     for medical surface models," SimVis, 2006.
+     https://www.researchgate.net/publication/221510388
+[6]  "Conformal performance range prediction for segmentation output quality control."
+     https://arxiv.org/abs/2407.13307
+[7]  "ConfIC-RCA: statistically grounded efficient estimation of segmentation quality."
+     https://arxiv.org/abs/2503.04522
+[8]  "Uncertainty-aware segmentation quality prediction via deep learning Bayesian
+     modeling." https://arxiv.org/abs/2508.01460
+[9]  A. N. Angelopoulos, S. Bates, "A gentle introduction to conformal prediction and
+     distribution-free uncertainty quantification," 2021. https://arxiv.org/abs/2107.07511
+[10] "A cloud-edge adaptive lightweight network with dynamic inference enables real-time
+     ultrasound image segmentation," Scientific Reports, 2026.
+     https://www.nature.com/articles/s41598-026-59234-y
+[11] "DeferredSeg: a multi-expert deferral framework for medical image segmentation,"
+     2026. https://arxiv.org/abs/2604.12411
+[12] "Soft Dice Confidence: a near-optimal confidence estimator for selective prediction
+     in semantic segmentation." https://arxiv.org/abs/2402.10665
+[13] R. Selvan et al., "Carbon footprint of selecting and training deep learning models
+     for medical image analysis," MICCAI, 2022. https://arxiv.org/abs/2203.02202
+[14] L. Maier-Hein, A. Reinke et al., "Metrics reloaded: recommendations for image
+     analysis validation," Nature Methods, 2024.
+[15] TotalSegmentator dataset v2, Zenodo. https://zenodo.org/records/10047292
+[16] M. Antonelli et al., "The Medical Segmentation Decathlon," Nature Communications,
+     2022.
+[17] Y. Ji et al., "AMOS: a large-scale abdominal multi-organ benchmark for versatile
+     medical image segmentation," NeurIPS Datasets and Benchmarks, 2022.
+[18] D. C. Montgomery, Design and Analysis of Experiments, Wiley.
+[19] A. Saltelli et al., Global Sensitivity Analysis: The Primer, Wiley, 2008.
+[20] S. Nikolov et al., "Clinically applicable segmentation of head and neck anatomy for
+     radiotherapy," Journal of Medical Internet Research, 2021.
+[21] F. Isensee et al., "Automated brain extraction of multisequence MRI using artificial
+     neural networks," Human Brain Mapping, 2019. https://arxiv.org/abs/1901.11341
+[22] "A hybrid AI-based and rule-based approach to DICOM de-identification: a solution
+     for the MIDI-B challenge." https://arxiv.org/abs/2509.00437
+[23] "Navigating the intersection of 3D printing, software regulation and quality control
+     for point-of-care manufacturing of personalized anatomical models."
+     https://pmc.ncbi.nlm.nih.gov/articles/PMC10080800/
+[24] TotalSegmentator repository: run modes and model licences. (+)
+     https://github.com/wasserth/TotalSegmentator
+[25] Council of the EU, "Artificial intelligence: Council gives final green light to
+     simplify and streamline rules," press release, 29 June 2026.
+     https://www.consilium.europa.eu/en/press/press-releases/2026/06/29/artificial-intelligence-council-gives-final-green-light-to-simplify-and-streamline-rules/
+[26] U.S. FDA, "Artificial intelligence-enabled medical devices" (list). (+)
+     https://www.fda.gov/medical-devices/artificial-intelligence-enabled-medical-devices/list-artificial-intelligence-enabled-medical-devices
+[27] Federal Register doc. 2026-12166, "Classification of the radiological machine
+     learning-based quantitative imaging software with predetermined change control
+     plan," 17 June 2026. https://www.federalregister.gov/documents/2026/06/17/2026-12166/medical-devices-radiology-devices-classification-of-the-radiological-machine-learning-based

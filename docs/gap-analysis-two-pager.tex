@@ -1,0 +1,113 @@
+% MEDSYS -- risk-aware DICOM-to-3D reconstruction: research gaps, questions and study design
+% Version 3.2 (revised after four external reviews; ready to freeze). Compile with pdflatex (run twice) or on Overleaf.
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[a4paper,margin=1.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{multicol}
+\usepackage[compact]{titlesec}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+
+\titleformat{\section}{\normalsize\bfseries}{\thesection.}{0.5em}{}
+\titlespacing*{\section}{0pt}{5pt}{2pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2.5pt}
+\setlist{itemsep=1pt,topsep=1.5pt,parsep=0pt,leftmargin=1.2em}
+\newcommand{\rf}[1]{\ref{#1}}
+\newcommand{\pv}{$^\dagger$}
+
+\begin{document}
+
+\begin{center}
+{\Large\bfseries Risk-Aware Automated DICOM-to-3D Reconstruction:\\[1pt] Research Gaps, Questions and Study Design}\\[3pt]
+{\small MEDSYS project \enspace$\cdot$\enspace v3.2, revised after four external reviews \enspace$\cdot$\enspace [Your Name] \enspace$\cdot$\enspace Supervisor: [Supervisor Name] \enspace$\cdot$\enspace [Department, University] \enspace$\cdot$\enspace October 2026}
+\end{center}
+\vspace{-5pt}\rule{\linewidth}{0.4pt}
+
+\textbf{Thesis.} \emph{This research develops a risk-aware framework for automated DICOM-to-3D anatomical reconstruction that quantifies stage-wise geometric error, predicts final-mesh reliability without ground truth, and selects reconstruction pipelines subject to task-specific accuracy and computational constraints.}
+
+\textbf{Context.} MEDSYS already runs end to end (Section~1), so the contribution is not the platform but \emph{the reliability of its output}: \textbf{measure $\rightarrow$ predict $\rightarrow$ decide}.
+
+\textbf{Sources and limits.} About 30 web searches (October 2026), a code audit at commit \texttt{130686f} and four external reviews. \pv{} marks sources read directly; verify the rest before citing. A logged systematic search must confirm novelty.
+
+\section{Current state of MEDSYS}
+\textbf{CT:} threshold heuristic or TotalSegmentator [\rf{r:tspaper}] (built on nnU-Net [\rf{r:nnunet}]; 3\,mm fast mode by default). \textbf{MRI:} BET with optional MedSAM refinement, then Gaussian-mixture tissues. \textbf{PET:} tumour-to-background hotspot. All routes share one mesher (mask blur, marching cubes, 30 Taubin iterations, decimation) with blur and decimation hand-tuned per structure. \textbf{Pilot:} heuristic versus TotalSegmentator (fast mode, CPU) on one chest CT gave Dice 0.95 for lungs and 0.11 for the skeleton. That is agreement with TotalSegmentator, not anatomical accuracy: \emph{pilot evidence motivating the problem}, not evidence about either engine.
+
+\section{Scientific gaps and research questions}
+\textbf{A1 -- Stage-wise attribution of geometric error.} Error sources in patient-specific 3D models are well characterised, with segmentation error dominating printing error [\rf{r:qareview}, \rf{r:phantom}], and smoothing is known to alter geometry [\rf{r:bade}]. There is \emph{limited evidence for} automated, quantitative, stage-wise attribution in end-to-end DICOM-to-mesh pipelines that compares segmentation engines and reconstruction choices, including their interactions, across multiple structures against expert ground truth.\\
+\textbf{RQ1 (measure).} Which pipeline stages, and which interactions between them, contribute most to final anatomical geometric error?
+
+\textbf{A2 -- Ground-truth-free, task-specific mesh reliability.} Segmentation-level quality control without ground truth is crowded [\rf{r:conformal}, \rf{r:confic}]; bounding \emph{final-mesh} error is less explored. Operationally: predict an upper bound $U(x)$ on ASSD, HD95 and volume error with $P(E_{\text{mesh}}\le U(x))\ge 1-\alpha$ holding empirically on held-out cases (split conformal prediction [\rf{r:angelopoulos}]); task suitability is $P(E_{\text{mesh}}\le\tau_{\text{task}})$ for VR, measurement or printing. A2 is distinct from segmentation QC only if RQ1 shows that reconstruction or topology matters.\\
+\textbf{RQ2 (predict).} Can final-mesh error and task suitability be predicted without ground truth at inference time, with empirically calibrated coverage?
+
+\textbf{A3 -- Accuracy-constrained pipeline selection.} Adaptive inference and deferral exist [\rf{r:cloudedge}, \rf{r:deferredseg}], so routing easy cases to a cheap engine is not novel. Instead, choose engine and reconstruction settings $p$ at minimum cost under a reliability target; energy [\rf{r:selvan}] is a cost term, not the thesis:
+\[
+p^{*}=\arg\min_{p}\;\bigl[\text{energy}(p)+\lambda\,\text{latency}(p)\bigr]\quad\text{s.t.}\quad P\bigl(E_{\text{mesh}}(p)\le\tau_{\text{task}}\bigr)\ge 1-\alpha .
+\]
+\textbf{RQ3 (decide).} Can RQ2's bounds select the lowest-cost pipeline that satisfies a predefined task-specific reliability constraint? \emph{Priority:} RQ1 is the core thesis and stands on its own; RQ2 is the major extension and RQ3 the applied extension, each built only on its predecessor's results.
+
+\section{Reference standard}
+\begin{itemize}
+\item \textbf{Three distinct objects.} \emph{Ground truth}: an expert-annotated mask, a reference standard rather than truth, since inter-rater variability sets a floor [\rf{r:mr}]. \emph{Reference surface}: a mesh made from it by one fixed, documented procedure (native-resolution marching cubes, no smoothing or decimation). \emph{Test mesh}: MEDSYS output under configuration $p$, always compared with the reference surface.
+\item \textbf{Tier 1, digital phantoms:} analytic surfaces voxelised at the study's spacings. This isolates reconstruction error exactly and measures the reference procedure's own error, which becomes the floor below which Tier~2 differences are not interpretable.
+\item \textbf{Tier 2, human anatomy:} end-to-end error against expert annotations.
+\end{itemize}
+
+\section{Study design}
+\begin{itemize}
+\item \textbf{Structures by regime, CT first:} high contrast (lung, bone), low contrast (liver) and, optionally, thin structures (vessels), from public expert-labelled datasets [\rf{r:tsdata}, \rf{r:msd}, \rf{r:amos}]; brain MRI is an extension once RQ1 runs on CT, and PET is out of scope (no labelled PET ground truth). \emph{Leakage and label bias:} evaluate TotalSegmentator only on held-out or external data, and check how labels were made, since model-assisted labels can favour that model family. Licences differ.
+\item \textbf{Configurations.} \emph{Production} parameters (TotalSegmentator fast mode, hand-tuned per-structure blur and decimation) appear as one named configuration only; \emph{research} experiments use one uniform grid for every structure. The \emph{canonical baseline}, from which every effect is reported, is TotalSegmentator 1.5\,mm, native spacing, no blur, marching cubes, no smoothing, no decimation; with the expert mask in place of the engine, it is the reference-surface procedure.
+\item \textbf{Exp.\ A, segmentation:} heuristic, TotalSegmentator 3\,mm (fast) and TotalSegmentator 1.5\,mm (full) against expert labels; BET+MedSAM only in the MRI extension. \textbf{Exp.\ B, reconstruction (causal isolation):} hold the segmentation fixed and intervene only on spacing and four explicit factors: mask blur $\sigma\in\{0,0.5,1\}$\,mm (millimetres, so blur is not confounded with spacing), isosurface algorithm (two variants), Taubin iterations $\in\{0,10,30,60\}$ and decimation $\in\{0,0.25,0.5,0.75\}$, all fixed before analysis. Run on the expert mask (pure reconstruction effect) and on each engine's mask (does reconstruction amplify or dampen segmentation error?). \textbf{Exp.\ C, full pipeline:} DICOM $\rightarrow$ engine $\rightarrow$ mesh against the reference surface.
+\item \textbf{Exp.\ D, attribution: split-plot design} [\rf{r:montgomery}]. Expensive whole-plot factors are engine $\times$ resolution ($3\times4=12$ segmentations per case); cheap sub-plot factors are blur $\times$ isosurface $\times$ smoothing $\times$ decimation ($3\times2\times4\times4=96$ meshes per segmentation), so 1{,}152 meshes per case-structure. Fit a mixed-effects model with case and structure as random effects and compute Sobol indices for the continuous reconstruction parameters [\rf{r:saltelli}]. Time a 2--3 case pilot first; if the full set is unaffordable, run the full grid on a subset (e.g.\ 20 cases) with the canonical and production configurations on all cases, or use a resolution-V fractional design.
+\item \textbf{Sample size is set by RQ2.} At $\alpha=0.05$, split conformal prediction needs at least 19 calibration cases per group for a finite bound, more for stable coverage [\rf{r:angelopoulos}]; with per-structure calibration, training and test splits, plan on roughly 60--100 cases per structure, confirmed against pilot variability. For RQ1, $n\approx(1.96\,s/h)^2$ from pilot SD $s$ and target half-width $h$ on mean ASSD ($s=1$\,mm, $h=0.3$\,mm gives about 43).
+\item \textbf{Accuracy and cost are separate experiments.} Experiments A--D measure geometry only; latency and energy come from a separate benchmark on fixed, documented hardware and meet only in RQ3. The device is recorded with every run, since GPU non-determinism can perturb segmentations slightly.
+\item \textbf{Metrics,} chosen per Metrics Reloaded [\rf{r:mr}], reported per case with confidence intervals: surface (ASSD, HD95, surface Dice [\rf{r:nikolov}], Chamfer), geometric (volume and surface-area error) and topological (components, holes, self-intersections). Task tolerances $\tau_{\text{task}}$ come from literature or clinicians and are fixed before analysis.
+\item \textbf{Output:} each mesh ships with a JSON (or glTF-extras) quality report of $U(x)$ and $P(E_{\text{mesh}}\le\tau_{\text{task}})$ per task; STL cannot carry metadata.
+\end{itemize}
+\textbf{Risks.} Design size, case numbers for RQ2, reference discipline and scope creep, mitigated above by the pilot and subset rule, CT-first scope, the fixed reference procedure and RQ1-first priority.
+
+\section{Engineering prerequisites (not contributions)}
+Expert-ground-truth validation harness; a configuration layer separating production defaults from research grids (reconstruction parameters are currently hard-coded at each call site); GPU inference (the installed PyTorch build is CPU-only); benchmarking BET+MedSAM against HD-BET [\rf{r:hdbet}]; verified de-identification and opaque dataset identifiers [\rf{r:midib}]; a provenance record (model version, weights hash, commit) on every output; multi-series handling.
+
+\section{Commercialisation and deployment constraints}
+Cleared incumbents hold diagnostic-use models [\rf{r:pocreg}], so early use is teaching, research and non-diagnostic planning; only some TotalSegmentator models are Apache-2.0 [\rf{r:tsrepo}]; EU duties for AI in medical devices start 2~Aug~2028 [\rf{r:eu}]; the FDA list is radiology-dominated [\rf{r:fda}] and a 2026 rule classifies radiological ML quantitative imaging software [\rf{r:fr}]. The realistic output is documentation, not clearance.
+
+\section*{References}
+\vspace{-3pt}
+\begin{multicols}{2}
+\footnotesize
+\begin{enumerate}[label={[\arabic*]},leftmargin=*,itemsep=0.5pt,topsep=0pt,parsep=0pt]
+\item\label{r:tspaper} J.~Wasserthal \emph{et al.}, ``TotalSegmentator: robust segmentation of 104 anatomic structures in CT images,'' \emph{Radiol.\ Artif.\ Intell.}, 2023. \href{https://doi.org/10.1148/ryai.230024}{doi:10.1148/ryai.230024}
+\item\label{r:nnunet} F.~Isensee \emph{et al.}, ``nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation,'' \emph{Nature Methods}, 2021.
+\item\label{r:qareview} ``Quality assurance of 3D-printed patient specific anatomical models: a systematic review,'' 2024. \href{https://www.researchgate.net/publication/379332555}{ResearchGate 379332555}
+\item\label{r:phantom} ``Insights into geometric deviations of medical 3D-printing: a phantom study utilizing error propagation analysis,'' \emph{3D Print.\ Med.}, 2024. \href{https://doi.org/10.1186/s41205-024-00242-x}{doi:10.1186/s41205-024-00242-x}
+\item\label{r:bade} R.~Bade, J.~Haase, B.~Preim, ``Comparison of fundamental mesh smoothing algorithms for medical surface models,'' SimVis, 2006. \href{https://www.researchgate.net/publication/221510388}{ResearchGate 221510388}
+\item\label{r:conformal} ``Conformal performance range prediction for segmentation output quality control.'' \href{https://arxiv.org/abs/2407.13307}{arXiv:2407.13307}
+\item\label{r:confic} ``ConfIC-RCA: statistically grounded efficient estimation of segmentation quality.'' \href{https://arxiv.org/abs/2503.04522}{arXiv:2503.04522}
+\item\label{r:angelopoulos} A.~N.~Angelopoulos, S.~Bates, ``A gentle introduction to conformal prediction and distribution-free uncertainty quantification,'' 2021. \href{https://arxiv.org/abs/2107.07511}{arXiv:2107.07511}
+\item\label{r:cloudedge} ``A cloud-edge adaptive lightweight network with dynamic inference enables real-time ultrasound image segmentation,'' \emph{Sci.\ Rep.}, 2026. \href{https://www.nature.com/articles/s41598-026-59234-y}{s41598-026-59234-y}
+\item\label{r:deferredseg} ``DeferredSeg: a multi-expert deferral framework for medical image segmentation,'' 2026. \href{https://arxiv.org/abs/2604.12411}{arXiv:2604.12411}
+\item\label{r:selvan} R.~Selvan \emph{et al.}, ``Carbon footprint of selecting and training deep learning models for medical image analysis,'' MICCAI, 2022. \href{https://arxiv.org/abs/2203.02202}{arXiv:2203.02202}
+\item\label{r:mr} L.~Maier-Hein, A.~Reinke \emph{et al.}, ``Metrics reloaded: recommendations for image analysis validation,'' \emph{Nature Methods}, 2024.
+\item\label{r:tsdata} TotalSegmentator dataset v2, Zenodo. \href{https://zenodo.org/records/10047292}{zenodo.org/records/10047292}
+\item\label{r:msd} M.~Antonelli \emph{et al.}, ``The Medical Segmentation Decathlon,'' \emph{Nature Communications}, 2022.
+\item\label{r:amos} Y.~Ji \emph{et al.}, ``AMOS: a large-scale abdominal multi-organ benchmark for versatile medical image segmentation,'' NeurIPS Datasets and Benchmarks, 2022.
+\item\label{r:montgomery} D.~C.~Montgomery, \emph{Design and Analysis of Experiments}, Wiley.
+\item\label{r:saltelli} A.~Saltelli \emph{et al.}, \emph{Global Sensitivity Analysis: The Primer}, Wiley, 2008.
+\item\label{r:nikolov} S.~Nikolov \emph{et al.}, ``Clinically applicable segmentation of head and neck anatomy for radiotherapy,'' \emph{J.\ Med.\ Internet Res.}, 2021.
+\item\label{r:hdbet} F.~Isensee \emph{et al.}, ``Automated brain extraction of multisequence MRI using artificial neural networks,'' \emph{Hum.\ Brain Mapp.}, 2019. \href{https://arxiv.org/abs/1901.11341}{arXiv:1901.11341}
+\item\label{r:midib} ``A hybrid AI-based and rule-based approach to DICOM de-identification: a solution for the MIDI-B challenge.'' \href{https://arxiv.org/abs/2509.00437}{arXiv:2509.00437}
+\item\label{r:pocreg} ``Navigating the intersection of 3D printing, software regulation and quality control for point-of-care manufacturing of personalized anatomical models.'' \href{https://pmc.ncbi.nlm.nih.gov/articles/PMC10080800/}{PMC10080800}
+\item\label{r:tsrepo} TotalSegmentator repository: run modes and model licences. \href{https://github.com/wasserth/TotalSegmentator}{github.com/wasserth/TotalSegmentator}\pv
+\item\label{r:eu} Council of the EU, ``Artificial intelligence: Council gives final green light to simplify and streamline rules,'' press release, 29~June~2026. \href{https://www.consilium.europa.eu/en/press/press-releases/2026/06/29/artificial-intelligence-council-gives-final-green-light-to-simplify-and-streamline-rules/}{consilium.europa.eu}
+\item\label{r:fda} U.S.\ FDA, ``Artificial intelligence-enabled medical devices'' (list). \href{https://www.fda.gov/medical-devices/artificial-intelligence-enabled-medical-devices/list-artificial-intelligence-enabled-medical-devices}{fda.gov}\pv
+\item\label{r:fr} Federal Register doc.\ 2026-12166, ``Classification of the radiological machine learning-based quantitative imaging software with predetermined change control plan,'' 17~June~2026. \href{https://www.federalregister.gov/documents/2026/06/17/2026-12166/medical-devices-radiology-devices-classification-of-the-radiological-machine-learning-based}{federalregister.gov}
+\end{enumerate}
+\end{multicols}
+
+\end{document}

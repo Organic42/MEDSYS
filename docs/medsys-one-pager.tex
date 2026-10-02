@@ -1,0 +1,71 @@
+% MEDSYS -- one-page summary of what we are building (based on research proposal v3.2)
+% Compile with pdflatex, or upload to Overleaf.
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[a4paper,margin=1.6cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage[compact]{titlesec}
+
+\titleformat{\section}{\normalsize\bfseries}{}{0em}{}
+\titlespacing*{\section}{0pt}{7pt}{2pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlist{itemsep=1.5pt,topsep=2pt,parsep=0pt,leftmargin=1.3em}
+\pagestyle{empty}
+
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries MEDSYS: What We Are Building}\\[4pt]
+{\small One-page summary of the research proposal (v3.2) \enspace$\cdot$\enspace [Your Name] \enspace$\cdot$\enspace Supervisor: [Supervisor Name] \enspace$\cdot$\enspace October 2026}
+\end{center}
+\vspace{-4pt}\rule{\linewidth}{0.4pt}
+
+\textbf{In one sentence.} MEDSYS turns medical scans (DICOM) into 3D anatomical models, and we are extending it to report \emph{how accurate each model is likely to be}, so a user knows whether it is good enough for teaching, VR, measurement or 3D printing.
+
+\section{The problem}
+Automatic tools can turn a CT scan into a 3D model in minutes, but they do not say how far the model's surface may be from the real anatomy. Error enters at several steps: segmentation, voxel size, blurring, surface extraction, smoothing and simplification. There is limited evidence on how much each step contributes, or on how to check a model when no expert annotation exists.
+
+\section{What exists today}
+A working end-to-end platform: upload a DICOM study in the browser $\rightarrow$ automatic CT/MRI/PET detection $\rightarrow$ segmentation by a fast classical engine or a deep-learning engine (TotalSegmentator) $\rightarrow$ 3D mesh $\rightarrow$ interactive 3D viewer. It runs as a web service, from a Docker configuration or as a Windows app, with 16 passing unit tests and continuous integration.
+
+\section{What we are adding: measure $\rightarrow$ predict $\rightarrow$ decide}
+\begin{enumerate}[leftmargin=1.6em]
+\item \textbf{Measure (core thesis).} Find which pipeline steps, and which combinations of steps, cause the error in the final 3D model.
+\item \textbf{Predict (extension).} Estimate a model's error \emph{without} expert ground truth, as an upper bound that the true error stays under for at least 95\% of models.
+\item \textbf{Decide (applied extension).} Choose the cheapest pipeline that still meets the accuracy a given task needs.
+\end{enumerate}
+
+\section{How we will test it}
+\begin{itemize}
+\item \textbf{Tier 1, digital phantoms:} shapes with mathematically exact surfaces, so reconstruction error can be measured precisely.
+\item \textbf{Tier 2, real anatomy:} public CT datasets with expert annotations: lung, bone and liver (vessels optional), roughly 60--100 cases per structure.
+\item \textbf{Controlled experiment:} three engines (classical, TotalSegmentator at 3\,mm and at 1.5\,mm) $\times$ four voxel resolutions $\times$ blur, surface algorithm, smoothing and simplification settings. One canonical baseline; the same settings for every structure; a short pilot first to size the experiment.
+\item \textbf{Metrics:} surface distance (ASSD, HD95, surface Dice), volume and surface-area error, and topology defects such as holes. Accuracy and speed/energy are measured separately.
+\end{itemize}
+
+\section{What the user will see}
+Every 3D model ships with a quality report: its predicted error, and a pass or ``review needed'' flag for each use (VR, measurement, 3D printing).
+
+\section{Scope}
+\textbf{In:} CT (lung, bone, liver). \textbf{Extension:} brain MRI. \textbf{Out:} PET (no labelled ground truth) and any clinical diagnosis. MEDSYS is a research and education tool, not a medical device.
+
+\section{Plan (about 12 weeks, indicative)}
+\begin{tabular}{@{}p{2.3cm}p{14cm}@{}}
+Weeks 1--2 & Groundwork: enable the GPU, fix patient-identity handling, make mesh settings configurable, run the systematic literature search. \\
+Weeks 2--4 & Tier 1 phantom experiment. \\
+Weeks 4--8 & Tier 2 CT experiments, producing the core (measure) results. \\
+Weeks 8--10 & Error prediction, if the measure results support it. \\
+Weeks 10--12 & Write-up; pipeline selection (decide) if time allows. \\
+\end{tabular}
+
+\section{Expected outputs}
+A thesis and paper on stage-wise geometric error in DICOM-to-3D reconstruction; an open-source benchmark harness; and MEDSYS models that carry their own quality reports.
+
+\section{Main risks}
+Experiment size (pilot first, smaller subset as fallback); enough labelled cases for the prediction step; discipline in how reference surfaces are built; and scope creep, handled by doing the core measure step first. Novelty must still be confirmed by the systematic literature search.
+
+\end{document}
