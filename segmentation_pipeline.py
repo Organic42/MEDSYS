@@ -42,6 +42,7 @@ import time
 # `os.path.dirname(__file__)` would resolve inside the bundle's internal
 # resource dir instead of next to the executable.
 import config
+from reconstruction import ReconParams, extract_isosurface, postprocess_surface
 
 PROJECT_DIR = config.RUNTIME_DIR
 OUTPUT_ROOT = config.OUTPUT_ROOT
@@ -145,25 +146,22 @@ def detect_modality(ds, override=None):
 
 def build_mesh(mask, spacing, sigma=0.6, taubin_iter=30, reduction=0.5,
                min_voxels=200):
-    """Binary mask -> smoothed, decimated PyVista surface mesh."""
-    import pyvista as pv
+    """Binary mask -> smoothed, decimated PyVista surface mesh.
+
+    These are the production defaults; call sites override them per structure.
+    The reconstruction itself lives in reconstruction.py, so research
+    experiments exercise exactly this code path. Blur here is in voxels.
+    """
     if mask.sum() < min_voxels:
         return None
-    sm = gaussian_filter(mask.astype(np.float32),
-                         sigma=(sigma, sigma, sigma) if np.isscalar(sigma) else sigma)
+    params = ReconParams(
+        blur_sigma_vox=(sigma, sigma, sigma) if np.isscalar(sigma) else tuple(sigma),
+        isosurface='lewiner', taubin_iter=taubin_iter, decimation=reduction)
     try:
-        verts, faces, _, _ = measure.marching_cubes(
-            sm, level=0.5, spacing=spacing,
-            gradient_direction='descent', allow_degenerate=False)
+        verts, faces = extract_isosurface(mask, spacing, params)
     except Exception:
         return None
-    fa = np.hstack([np.full((len(faces), 1), 3), faces]).ravel()
-    mesh = pv.PolyData(verts, fa)
-    mesh = mesh.smooth_taubin(n_iter=taubin_iter, pass_band=0.05,
-                              normalize_coordinates=True)
-    if reduction > 0:
-        mesh = mesh.decimate_pro(reduction=reduction, feature_angle=45.0,
-                                 preserve_topology=True)
+    mesh = postprocess_surface(verts, faces, params)
     mesh = mesh.compute_normals(cell_normals=False, point_normals=True,
                                 auto_orient_normals=True, consistent_normals=True)
     return mesh
