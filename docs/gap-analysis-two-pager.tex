@@ -12,8 +12,19 @@
 \usepackage[compact]{titlesec}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xurl}
+\usepackage{xcolor}
 
-\titleformat{\section}{\normalsize\bfseries}{\thesection.}{0.5em}{}
+% MEDSYS brand: Inter for text, IBM Plex Mono for code and numbers. Both are
+% on CTAN and Overleaf; if missing, the document falls back to Latin Modern.
+\IfFileExists{inter.sty}{\usepackage{inter}}{}
+\IfFileExists{plex-mono.sty}{\usepackage{plex-mono}}{}
+\renewcommand{\familydefault}{\sfdefault}
+% Orange is an accent for rules and markers only: as text on white it is 2.6:1.
+\definecolor{brandorange}{HTML}{FF7A18}
+\definecolor{brandtext}{HTML}{1F2933}
+\definecolor{brandtext2}{HTML}{667085}
+
+\titleformat{\section}{\normalsize\bfseries\color{brandtext}}{\textcolor{brandorange}{\thesection}}{0.5em}{}
 \titlespacing*{\section}{0pt}{5pt}{2pt}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{2.5pt}
@@ -22,12 +33,13 @@
 \newcommand{\pv}{$^\dagger$}
 
 \begin{document}
+\color{brandtext}
 
 \begin{center}
 {\Large\bfseries Risk-Aware Automated DICOM-to-3D Reconstruction:\\[1pt] Research Gaps, Questions and Study Design}\\[3pt]
-{\small MEDSYS project \enspace$\cdot$\enspace v3.2, revised after four external reviews \enspace$\cdot$\enspace [Your Name] \enspace$\cdot$\enspace Supervisor: [Supervisor Name] \enspace$\cdot$\enspace [Department, University] \enspace$\cdot$\enspace October 2026}
+{\small\color{brandtext2} MEDSYS project \enspace$\cdot$\enspace v3.2, revised after four external reviews \enspace$\cdot$\enspace [Your Name] \enspace$\cdot$\enspace Supervisor: [Supervisor Name] \enspace$\cdot$\enspace [Department, University] \enspace$\cdot$\enspace October 2026}
 \end{center}
-\vspace{-5pt}\rule{\linewidth}{0.4pt}
+\vspace{-5pt}{\color{brandorange}\rule{\linewidth}{1.2pt}}
 
 \textbf{Thesis.} \emph{This research develops a risk-aware framework for automated DICOM-to-3D anatomical reconstruction that quantifies stage-wise geometric error, predicts final-mesh reliability without ground truth, and selects reconstruction pipelines subject to task-specific accuracy and computational constraints.}
 

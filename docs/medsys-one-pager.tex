@@ -8,8 +8,19 @@
 \usepackage{microtype}
 \usepackage{enumitem}
 \usepackage[compact]{titlesec}
+\usepackage{xcolor}
 
-\titleformat{\section}{\normalsize\bfseries}{}{0em}{}
+% MEDSYS brand: Inter for text, IBM Plex Mono for code and numbers. Both are
+% on CTAN and Overleaf; if missing, the document falls back to Latin Modern.
+\IfFileExists{inter.sty}{\usepackage{inter}}{}
+\IfFileExists{plex-mono.sty}{\usepackage{plex-mono}}{}
+\renewcommand{\familydefault}{\sfdefault}
+% Orange is an accent for rules and markers only: as text on white it is 2.6:1.
+\definecolor{brandorange}{HTML}{FF7A18}
+\definecolor{brandtext}{HTML}{1F2933}
+\definecolor{brandtext2}{HTML}{667085}
+
+\titleformat{\section}{\normalsize\bfseries\color{brandtext}}{\textcolor{brandorange}{\rule[0.5pt]{6pt}{6pt}}}{0.5em}{}
 \titlespacing*{\section}{0pt}{7pt}{2pt}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{3pt}
@@ -17,12 +28,13 @@
 \pagestyle{empty}
 
 \begin{document}
+\color{brandtext}
 
 \begin{center}
 {\LARGE\bfseries MEDSYS: What We Are Building}\\[4pt]
-{\small One-page summary of the research proposal (v3.2) \enspace$\cdot$\enspace [Your Name] \enspace$\cdot$\enspace Supervisor: [Supervisor Name] \enspace$\cdot$\enspace October 2026}
+{\small\color{brandtext2} One-page summary of the research proposal (v3.2) \enspace$\cdot$\enspace [Your Name] \enspace$\cdot$\enspace Supervisor: [Supervisor Name] \enspace$\cdot$\enspace October 2026}
 \end{center}
-\vspace{-4pt}\rule{\linewidth}{0.4pt}
+\vspace{-4pt}{\color{brandorange}\rule{\linewidth}{1.2pt}}
 
 \textbf{In one sentence.} MEDSYS turns medical scans (DICOM) into 3D anatomical models, and we are extending it to report \emph{how accurate each model is likely to be}, so a user knows whether it is good enough for teaching, VR, measurement or 3D printing.
 

@@ -4,67 +4,121 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MEDSYS — DICOM to 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0d1117;--panel:#161b22;--border:#27303a;--accent:#5bb6ff;--accent2:#2ecc71;--text:#e6edf3;--muted:#8b949e;}
+  /* MEDSYS brand tokens. Orange marks actions, active states and highlights only. */
+  :root{
+    --primary:#FF7A18; --primary-hover:#E9680A; --primary-soft:#FFF0E3;
+    --bg:#F5F5F4; --surface:#FFFFFF; --elevated:#FCFCFB;
+    --text:#1F2933; --text-2:#667085; --muted:#98A2B3; --border:#E7E7E5;
+    --success:#36A269; --success-bg:#EAF7F0; --warning:#E8A23A; --warning-bg:#FFF5E5;
+    --error:#D95C5C; --error-bg:#FDECEC; --info:#667085;
+    --radius-lg:18px; --radius:12px; --radius-sm:8px;
+    --shadow:0 1px 2px rgba(31,41,51,.04),0 8px 24px rgba(31,41,51,.06);
+    --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+  }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font:15px/1.5 'Segoe UI',system-ui,sans-serif;}
-  header{padding:22px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;}
-  header h1{font-size:20px;font-weight:700;}
-  header .tag{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:2px 8px;border-radius:20px;}
+  body{background:var(--bg);color:var(--text);font:400 15px/1.55 var(--font);-webkit-font-smoothing:antialiased;}
+
+  header{padding:16px 32px;background:var(--surface);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:12px;}
+  header h1{font-size:19px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;}
+  header .mark{width:26px;height:26px;border-radius:8px;background:var(--primary);position:relative;}
+  header .mark::after{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--surface);}
+  .tag{font-size:12px;font-weight:500;color:var(--text-2);background:var(--elevated);
+    border:1px solid var(--border);padding:3px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;}
+  .tag[data-state]::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted);}
+  .tag[data-state=gpu]::before{background:var(--success);}
+  .tag[data-state=cpu]::before{background:var(--warning);}
+  .navlink{margin-left:auto;color:var(--text);font-size:13px;font-weight:500;text-decoration:none;
+    background:var(--surface);border:1px solid var(--border);padding:7px 14px;border-radius:999px;transition:.15s;}
+  .navlink:hover{border-color:var(--primary);background:var(--primary-soft);}
+
   .wrap{max-width:1200px;margin:0 auto;padding:28px 32px;}
-  .grid{display:grid;grid-template-columns:340px 1fr;gap:24px;}
-  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;}
-  h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:14px;}
-  #drop{border:2px dashed var(--border);border-radius:12px;padding:34px 18px;text-align:center;cursor:pointer;transition:.15s;}
-  #drop.hover{border-color:var(--accent);background:rgba(91,182,255,.08);}
-  #drop .big{font-size:38px;opacity:.5;}
-  #drop p{color:var(--muted);margin-top:8px;font-size:13px;}
-  input[type=text],select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
-    padding:9px 11px;border-radius:8px;margin-top:10px;font-size:14px;}
-  button{background:var(--accent);color:#04101c;border:none;padding:10px 16px;border-radius:8px;font-weight:600;
-    cursor:pointer;margin-top:12px;width:100%;font-size:14px;}
-  button:disabled{opacity:.5;cursor:not-allowed;}
-  .job{margin-top:14px;font-size:13px;}
-  .bar{height:6px;background:var(--bg);border-radius:4px;overflow:hidden;margin:8px 0;}
-  .bar>i{display:block;height:100%;width:30%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s;}
-  .log{font:11px/1.5 ui-monospace,Consolas,monospace;color:var(--muted);background:var(--bg);border-radius:8px;
-    padding:10px;margin-top:10px;max-height:160px;overflow:auto;white-space:pre-wrap;}
-  .ds{border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden;}
-  .ds h3{padding:12px 16px;background:#1b222c;font-size:15px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
-  .ds h3 .meta{font-size:12px;color:var(--muted);font-weight:400;}
-  .ds .body{padding:16px;display:none;}
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start;}
+  .panel{background:var(--surface);border-radius:var(--radius-lg);padding:24px;box-shadow:var(--shadow);}
+  h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-2);margin-bottom:16px;}
+
+  #drop{border:1.5px dashed var(--border);border-radius:var(--radius);padding:30px 18px;text-align:center;
+    cursor:pointer;transition:.15s;background:var(--elevated);}
+  #drop:hover,#drop.hover{border-color:var(--primary);background:var(--primary-soft);}
+  #drop .big{width:46px;height:46px;margin:0 auto 10px;border-radius:50%;background:var(--primary-soft);
+    display:flex;align-items:center;justify-content:center;}
+  #drop .big svg{width:22px;height:22px;stroke:var(--primary-hover);}
+  #drop strong{font-weight:600;}
+  #drop p{color:var(--text-2);margin-top:4px;font-size:13px;}
+
+  input[type=text],select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);
+    padding:10px 12px;border-radius:10px;margin-top:10px;font:400 14px var(--font);transition:.15s;}
+  input[type=text]::placeholder{color:var(--muted);}
+  input[type=text]:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  input[type=checkbox]{accent-color:var(--primary);width:15px;height:15px;}
+  /* Dark text on orange: white on #FF7A18 is 2.6:1 and fails WCAG AA; #1F2933 is 5.7:1. */
+  button{background:var(--primary);color:var(--text);border:none;padding:11px 16px;border-radius:10px;
+    font:600 14px var(--font);cursor:pointer;margin-top:14px;width:100%;transition:.15s;}
+  button:hover:not(:disabled){background:var(--primary-hover);}
+  button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--surface),0 0 0 5px var(--primary);}
+  button:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
+
+  .job{margin-top:16px;font-size:13px;}
+  #jobmsg{display:flex;align-items:center;gap:8px;font-weight:500;}
+  #jobmsg::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted);}
+  #jobmsg[data-status=running]::before{background:var(--primary);}
+  #jobmsg[data-status=done]::before{background:var(--success);}
+  #jobmsg[data-status=error]::before{background:var(--error);}
+  .bar{height:6px;background:var(--bg);border-radius:999px;overflow:hidden;margin:10px 0 6px;}
+  .bar>i{display:block;height:100%;width:30%;background:var(--primary);border-radius:999px;transition:width .4s;}
+  .log{font:400 11.5px/1.55 var(--mono);color:var(--text-2);background:var(--elevated);border:1px solid var(--border);
+    border-radius:10px;padding:10px 12px;margin-top:10px;max-height:160px;overflow:auto;white-space:pre-wrap;}
+
+  .ds{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;overflow:hidden;}
+  .ds h3{padding:14px 18px;background:var(--elevated);font-size:15px;font-weight:600;display:flex;
+    justify-content:space-between;align-items:center;cursor:pointer;transition:.15s;}
+  .ds h3:hover{background:var(--primary-soft);}
+  .ds.open h3{border-bottom:1px solid var(--border);}
+  .ds h3 .meta{font:400 12px var(--mono);color:var(--text-2);}
+  .ds .body{padding:18px;display:none;}
   .ds.open .body{display:block;}
-  .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px;}
-  .thumbs img{width:100%;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:#000;}
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;}
-  .chip{font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:20px;cursor:pointer;
-    display:flex;align-items:center;gap:6px;user-select:none;}
-  .chip .dot{width:10px;height:10px;border-radius:50%;}
-  .chip.off{opacity:.4;}
-  #viewer{width:100%;height:420px;background:#05080d;border-radius:10px;border:1px solid var(--border);}
-  .report{font:12px/1.6 ui-monospace,Consolas,monospace;color:var(--muted);background:var(--bg);padding:12px;
-    border-radius:8px;margin-top:10px;white-space:pre-wrap;max-height:180px;overflow:auto;}
-  .empty{color:var(--muted);font-size:14px;padding:20px;text-align:center;}
-  #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:50;cursor:zoom-out;}
-  #lightbox img{max-width:94%;max-height:94%;border-radius:8px;}
-  a.dl{color:var(--accent);font-size:12px;text-decoration:none;}
-  .est{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;}
-  .est h4{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px;}
-  .est table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px;}
+  .thumbs img{width:100%;border-radius:10px;border:1px solid var(--border);cursor:zoom-in;background:var(--text);}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;}
+  .chip{font-size:12px;font-weight:500;padding:5px 11px;background:var(--surface);border:1px solid var(--border);
+    border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none;transition:.15s;}
+  .chip:hover{border-color:var(--primary);}
+  .chip .dot{width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(31,41,51,.12);}
+  .chip.off{opacity:.45;}
+  /* Light, slightly vignetted stage so realistic anatomy colours stay dominant. */
+  .stage{border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;
+    background:radial-gradient(ellipse at 50% 42%,#FFFFFF 0%,#F3F2EF 55%,#E6E4DF 100%);}
+  .report{font:400 12px/1.6 var(--mono);color:var(--text-2);background:var(--elevated);border:1px solid var(--border);
+    padding:12px 14px;border-radius:10px;margin-top:10px;white-space:pre-wrap;max-height:180px;overflow:auto;}
+  .empty{color:var(--text-2);font-size:14px;padding:28px;text-align:center;}
+  #lightbox{position:fixed;inset:0;background:rgba(31,41,51,.88);display:none;align-items:center;justify-content:center;
+    z-index:50;cursor:zoom-out;}
+  #lightbox img{max-width:94%;max-height:94%;border-radius:var(--radius);}
+  a.dl{color:var(--text);font-size:12px;text-decoration:underline;text-decoration-color:var(--primary);text-underline-offset:3px;}
+
+  .est{background:var(--elevated);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+  .est h4{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);margin-bottom:8px;}
+  .est table{width:100%;border-collapse:collapse;font-size:13px;}
   .est td{padding:3px 0;color:var(--text);}
-  .est td.t{text-align:right;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
-  .est .tot{border-top:1px solid var(--border);font-weight:600;}
-  .est .note{color:var(--muted);font-size:11px;margin-top:8px;line-height:1.4;}
+  .est td.t{text-align:right;font:400 12.5px var(--mono);color:var(--text);white-space:nowrap;}
+  .est .tot td{border-top:1px solid var(--border);padding-top:7px;font-weight:600;}
+  .est .tot td.t{font-weight:500;box-shadow:inset 3px 0 0 var(--primary);padding-left:8px;}
+  .est .note{color:var(--text-2);font-size:11.5px;margin-top:8px;line-height:1.45;}
+  .est .note.warn{background:var(--warning-bg);color:var(--text);border-radius:var(--radius-sm);padding:8px 10px;
+    border-left:3px solid var(--warning);}
 </style>
 </head>
 <body>
 <header>
-  <h1>🧠 MEDSYS</h1>
+  <h1><span class="mark" aria-hidden="true"></span>MEDSYS</h1>
   <span class="tag">DICOM → 3D models</span>
   <span class="tag" id="devbadge">device: …</span>
-  <a href="/brain.html" style="margin-left:auto;color:var(--accent);font-size:13px;
-     text-decoration:none;border:1px solid var(--border);padding:5px 12px;border-radius:20px">
-     🧠 Neuroplasticity Explorer →</a>
+  <a class="navlink" href="/brain.html">Neuroplasticity Explorer →</a>
 </header>
 
 <div class="wrap">
@@ -74,7 +128,7 @@
       <div class="panel">
         <h2>Upload dataset</h2>
         <div id="drop">
-          <div class="big">⬆</div>
+          <div class="big"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg></div>
           <strong>Drop a .zip of DICOM files</strong>
           <p>or click to browse</p>
           <input type="file" id="file" accept=".zip" hidden>
@@ -84,7 +138,7 @@
           <option value="heuristic">Fast engine (heuristic — lungs/bone/organs blobs)</option>
           <option value="totalseg" id="engineTotalseg">AI organs (TotalSegmentator — 100+ structures)</option>
         </select>
-        <p id="engineNote" style="display:none;font-size:11px;color:var(--muted);margin-top:4px">
+        <p id="engineNote" style="display:none;font-size:11.5px;color:var(--text-2);margin-top:6px">
           AI organs engine isn't available on this deployment (needs torch + TotalSegmentator).
           Run the full stack locally or on a VPS to use it — see the README.
         </p>
@@ -94,15 +148,15 @@
           <option value="MR">MR (brain)</option>
           <option value="PT">PET</option>
         </select>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--muted);cursor:pointer;">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--text-2);cursor:pointer;">
           <input type="checkbox" id="fast"> Fast mode (skip MedSAM — brain finishes ~3× faster)
         </label>
         <button id="go" disabled>Segment</button>
-        <div id="estimate" style="margin-top:14px;"></div>
+        <div id="estimate" style="margin-top:16px;"></div>
         <div class="job" id="job" style="display:none">
           <div id="jobmsg">Queued…</div>
           <div class="bar"><i id="barfill"></i></div>
-          <div id="jobstep" style="font-size:12px;color:var(--muted);margin-top:4px;"></div>
+          <div id="jobstep" style="font:400 12px var(--mono);color:var(--text-2);margin-top:4px;"></div>
           <div class="log" id="joblog"></div>
         </div>
       </div>
@@ -129,7 +183,32 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 
-const PALETTE = ['#5bb6ff','#ff6b6b','#f5e98c','#7CFC9B','#c792ea','#ff9ec4','#ffa94d','#74e0d8','#b0bec5'];
+// ---------- anatomy colours ----------
+// Brand anatomy palette, matched by structure name. Order matters: vessels
+// are tested before lungs so "pulmonary_vein" is a vessel, not lung.
+const ANATOMY = [
+  [/tumou?r|hotspot|lesion|uptake/, '#F2B632'],
+  [/aorta|arter|vein|vena|vessel|portal|brachiocephalic_trunk/, '#4F91D9'],
+  [/heart|atrial|ventric|myocard/, '#E66A6A'],
+  [/lung/, '#73C8D0'],
+  [/liver/, '#C58A68'],
+  [/skeleton|bone|rib|vertebra|clavic|scapula|humerus|sternum|costal|femur|hip|sacrum|skull|tibia|fibula|ulna/, '#E5D5B8'],
+];
+// Not in the brand palette: muted extensions chosen to sit alongside it.
+const EXTRA = {body:'#D9D6CF', soft_tissue:'#E8C9B5', brain_surface:'#C9C2D6',
+               gray_matter:'#D9A9A4', white_matter:'#F1E7D8'};
+const FALLBACK = ['#8FA3B8','#B4A0CF','#8CC0A0','#D79AAE','#C9A86A','#7FB6C9','#A9B57F','#B8A89A'];
+function colorFor(label){
+  const n = label.toLowerCase();
+  if (EXTRA[n]) return EXTRA[n];
+  for (const [re, c] of ANATOMY) if (re.test(n)) return c;
+  // Hash the name without its side, so paired organs match and a structure
+  // keeps the same colour in every dataset.
+  const base = n.replace(/_(left|right)$/, '');
+  let h = 0;
+  for (const ch of base) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return FALLBACK[h % FALLBACK.length];
+}
 
 // ---------- device + per-step time estimates ----------
 // [label, cpu_seconds, gpu_seconds]  (gpu only helps deep-learning steps)
@@ -147,8 +226,8 @@ const fmt=s=>s>=60?`~${Math.round(s/60)} min`:`~${s}s`;
 
 async function initDevice(){
   try{ const d=await (await fetch('/api/device')).json();
-    DEVICE=d.device; document.getElementById('devbadge').textContent='device: '+d.name;
-    document.getElementById('devbadge').style.color=d.device==='cuda'?'#7CFC9B':'#ffa94d';
+    DEVICE=d.device; const b=document.getElementById('devbadge');
+    b.textContent='device: '+d.name; b.dataset.state=d.device==='cuda'?'gpu':'cpu';
   }catch(e){}
   renderEstimate();
 }
@@ -173,7 +252,7 @@ function renderEstimate(){
   rows.forEach(r=>{ tot+=r[gi]; html+=`<tr><td>${r[0]}</td><td class="t">${fmt(r[gi])}</td></tr>`; });
   html+=`<tr class="tot"><td>Total</td><td class="t">${fmt(tot)}</td></tr></table>`;
   if(DEVICE!=='cuda' && key==='MR')
-    html+='<div class="note">⚠ No GPU detected. MedSAM dominates on CPU — choose “Fast (skip MedSAM)” to finish in ~3 min, or run on a CUDA machine for ~'+fmt(STEPS.MR.reduce((a,r)=>a+r[2],0))+'.</div>';
+    html+='<div class="note warn">No GPU detected. MedSAM dominates on CPU — choose “Fast (skip MedSAM)” to finish in ~3 min, or run on a CUDA machine for ~'+fmt(STEPS.MR.reduce((a,r)=>a+r[2],0))+'.</div>';
   html+='<div class="note">Estimates are approximate; the live log shows real per-step timing.</div></div>';
   document.getElementById('estimate').innerHTML=html;
 }
@@ -190,6 +269,11 @@ drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files[0]) setFile(ev.dataT
 fileIn.onchange=()=>{ if(fileIn.files[0]) setFile(fileIn.files[0]); };
 function setFile(f){ chosen=f; drop.querySelector('strong').textContent=f.name; goBtn.disabled=false; }
 
+function setStatus(status, text){
+  const msg=document.getElementById('jobmsg');
+  msg.dataset.status=status; msg.textContent=text;
+}
+
 goBtn.onclick=async()=>{
   if(!chosen) return;
   goBtn.disabled=true;
@@ -200,25 +284,24 @@ goBtn.onclick=async()=>{
   fd.append('no_medsam',document.getElementById('fast').checked?'1':'');
   fd.append('engine',document.getElementById('engine').value);
   const job=document.getElementById('job'); job.style.display='block';
-  document.getElementById('jobmsg').textContent='Uploading…';
+  setStatus('running','Uploading…');
   try{
     const r=await fetch('/api/upload',{method:'POST',body:fd});
     if(!r.ok){ throw new Error((await r.json()).detail||'upload failed'); }
     const {job_id}=await r.json();
     poll(job_id);
-  }catch(e){ document.getElementById('jobmsg').textContent='❌ '+e.message; goBtn.disabled=false; }
+  }catch(e){ setStatus('error','Upload failed: '+e.message); goBtn.disabled=false; }
 };
 
 function poll(id){
-  const msg=document.getElementById('jobmsg'), log=document.getElementById('joblog'),
+  const log=document.getElementById('joblog'),
     fill=document.getElementById('barfill'), stepEl=document.getElementById('jobstep');
   const t0=Date.now();
   const iv=setInterval(async()=>{
     let j;
     try{ const r=await fetch('/api/jobs/'+id); if(!r.ok) throw 0; j=await r.json(); }
     catch(e){ stepEl.textContent='(lost connection to server — is it still running?)'; return; }
-    const icon=({queued:'⏳ ',running:'⚙️ ',done:'✅ ',error:'❌ '}[j.status]||'');
-    msg.textContent=icon+j.message;
+    setStatus(j.status==='queued'?'queued':j.status, j.message);
     log.textContent=(j.log||[]).join('\n'); log.scrollTop=log.scrollHeight;
     // Honest progress: parse the "[x/N]" step header from the live log
     let pct=5;
@@ -232,7 +315,7 @@ function poll(id){
     if(j.status==='done'||j.status==='error'){
       clearInterval(iv);
       goBtn.disabled=false;
-      if(j.status==='done'){ msg.textContent='✅ Done in '+stepEl.textContent.replace('elapsed ',''); loadDatasets(); }
+      if(j.status==='done'){ setStatus('done','Done in '+stepEl.textContent.replace('elapsed ','')); loadDatasets(); }
     }
   },1500);
   // also refresh the gallery periodically so finished datasets appear even if poll hiccups
@@ -278,7 +361,7 @@ function renderDS(ds){
     if(nMesh){
       const chips=document.createElement('div'); chips.className='chips'; body.appendChild(chips);
       const canvas=document.createElement('div'); canvas.id='v_'+ds.name; canvas.style.cssText='width:100%;height:420px';
-      const view=document.createElement('div'); view.appendChild(canvas); body.appendChild(view);
+      const view=document.createElement('div'); view.className='stage'; view.appendChild(canvas); body.appendChild(view);
       init3D(ds, canvas, chips);
     }
   }
@@ -287,28 +370,30 @@ function renderDS(ds){
 
 function init3D(ds, host, chips){
   const W=host.clientWidth||800, H=420;
-  const scene=new THREE.Scene(); scene.background=new THREE.Color(0x05080d);
+  const scene=new THREE.Scene();   // transparent: the .stage gradient shows through
   const cam=new THREE.PerspectiveCamera(45,W/H,0.1,5000); cam.position.set(0,0,400);
-  const r=new THREE.WebGLRenderer({antialias:true}); r.setSize(W,H); r.setPixelRatio(devicePixelRatio);
+  const r=new THREE.WebGLRenderer({antialias:true,alpha:true}); r.setClearColor(0x000000,0);
+  r.setSize(W,H); r.setPixelRatio(devicePixelRatio);
   host.appendChild(r.domElement);
   const ctrl=new OrbitControls(cam,r.domElement); ctrl.enableDamping=true;
-  scene.add(new THREE.AmbientLight(0xffffff,.6));
-  const d1=new THREE.DirectionalLight(0xffffff,.8); d1.position.set(1,1,1); scene.add(d1);
-  const d2=new THREE.DirectionalLight(0x88aaff,.4); d2.position.set(-1,-.5,-1); scene.add(d2);
+  scene.add(new THREE.AmbientLight(0xffffff,.55));
+  const key=new THREE.DirectionalLight(0xffffff,.85); key.position.set(1,1,1); scene.add(key);
+  const fill=new THREE.DirectionalLight(0xfff0e3,.35); fill.position.set(-1,-.5,-1); scene.add(fill);
   const loader=new STLLoader(); const group=new THREE.Group(); scene.add(group);
   let box=new THREE.Box3(), loaded=0;
   ds.meshes.forEach((mesh,i)=>{
     const url=`/output/${ds.name}/${mesh}`;
-    const color=PALETTE[i%PALETTE.length];
+    const label=mesh.split('/').pop().replace('.stl','');
+    const color=colorFor(label);
     loader.load(url,geo=>{
       geo.computeVertexNormals();
-      const mat=new THREE.MeshPhongMaterial({color,shininess:30,specular:0x222222,
-        transparent:mesh.includes('body')||mesh.includes('uptake'),opacity:mesh.includes('body')||mesh.includes('uptake')?0.18:1.0});
+      const translucent=mesh.includes('body')||mesh.includes('uptake');
+      const mat=new THREE.MeshPhongMaterial({color,shininess:25,specular:0x1a1a1a,
+        transparent:translucent,opacity:translucent?0.18:1.0,depthWrite:!translucent});
       const m=new THREE.Mesh(geo,mat); group.add(m);
       box.expandByObject(m); loaded++;
       if(loaded===ds.meshes.length) frame();
       // toggle chip
-      const label=mesh.split('/').pop().replace('.stl','');
       const chip=document.createElement('div'); chip.className='chip';
       chip.innerHTML=`<span class="dot" style="background:${color}"></span>${label}`;
       chip.onclick=()=>{ m.visible=!m.visible; chip.classList.toggle('off',!m.visible); };
