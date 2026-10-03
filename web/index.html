@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MEDSYS — DICOM to 3D</title>
+<title>MEDSYS — Workbench</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -15,329 +15,402 @@
     --text:#1F2933; --text-2:#667085; --muted:#98A2B3; --border:#E7E7E5;
     --success:#36A269; --success-bg:#EAF7F0; --warning:#E8A23A; --warning-bg:#FFF5E5;
     --error:#D95C5C; --error-bg:#FDECEC; --info:#667085;
-    --radius-lg:18px; --radius:12px; --radius-sm:8px;
+    --radius-lg:16px; --radius:12px; --radius-sm:8px;
     --shadow:0 1px 2px rgba(31,41,51,.04),0 8px 24px rgba(31,41,51,.06);
     --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
-    --rail:72px; --topbar:64px;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   html,body{height:100%;}
   body{background:var(--bg);color:var(--text);font:400 14px/1.5 var(--font);-webkit-font-smoothing:antialiased;}
-  button{font:inherit;color:inherit;}
-  .mono{font-family:var(--mono);}
+  button,input,select{font:inherit;color:inherit;}
+  svg{flex:none;}
+  :focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 
-  .app{display:grid;grid-template-columns:var(--rail) minmax(0,1fr);height:100vh;}
-
-  /* ── icon rail ── */
-  .rail{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;
-    align-items:center;padding:16px 0 18px;gap:6px;}
-  .mark{width:34px;height:34px;border-radius:10px;background:var(--primary);position:relative;margin-bottom:18px;flex:none;}
-  .mark::after{content:"";position:absolute;inset:10px;border-radius:50%;background:var(--surface);}
-  .navbtn{position:relative;width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
-    color:var(--text-2);background:none;border:none;cursor:pointer;text-decoration:none;transition:.15s;}
-  .navbtn svg{width:20px;height:20px;}
-  .navbtn:hover{background:var(--bg);color:var(--text);}
-  .navbtn.active{background:var(--primary-soft);color:var(--text);}
-  .navbtn.active::before{content:"";position:absolute;left:-14px;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--primary);}
-  .navbtn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--primary);}
-  .tip{position:absolute;left:54px;top:50%;transform:translateY(-50%);background:var(--text);color:#fff;font-size:12px;
-    font-weight:500;padding:4px 9px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:.12s;z-index:30;}
-  .navbtn:hover .tip,.navbtn:focus-visible .tip{opacity:1;}
-  .rail .grow{flex:1;}
-  .devdot{width:10px;height:10px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 4px var(--bg);}
-  .devdot[data-state=gpu]{background:var(--success);}
-  .devdot[data-state=cpu]{background:var(--warning);}
+  .app{display:grid;grid-template-rows:64px minmax(0,1fr);height:100vh;}
 
   /* ── top bar ── */
-  .main{display:grid;grid-template-rows:var(--topbar) minmax(0,1fr);min-width:0;min-height:0;}
-  .topbar{display:flex;align-items:center;gap:12px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border);min-width:0;}
-  .brand{font-weight:700;font-size:16px;letter-spacing:-.01em;}
-  .sep{width:1px;height:22px;background:var(--border);flex:none;}
-  .dsselect{appearance:none;-webkit-appearance:none;border:1px solid var(--border);border-radius:10px;cursor:pointer;
-    background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 11px center;
-    padding:7px 34px 7px 12px;font:600 14px var(--font);color:var(--text);max-width:280px;transition:.15s;}
-  .dsselect:hover{border-color:var(--primary);}
-  .dsselect:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
-  .tag{font-size:12px;font-weight:500;color:var(--text-2);background:var(--elevated);border:1px solid var(--border);
-    padding:3px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
-  .tag[data-state]::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted);}
-  .tag[data-state=gpu]::before{background:var(--success);}
-  .tag[data-state=cpu]::before{background:var(--warning);}
-  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px;}
-  /* Dark text on orange: white on #FF7A18 is 2.6:1 and fails WCAG AA; #1F2933 is 5.7:1. */
-  .btn-primary{background:var(--primary);color:var(--text);border:none;padding:9px 16px;border-radius:10px;font-weight:600;
-    cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:.15s;white-space:nowrap;}
-  .btn-primary svg{width:16px;height:16px;}
-  .btn-primary:hover:not(:disabled){background:var(--primary-hover);}
-  .btn-primary:focus-visible{outline:none;box-shadow:0 0 0 3px var(--surface),0 0 0 5px var(--primary);}
-  .btn-primary:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
-  .jobpill{display:none;align-items:center;gap:8px;font-size:12.5px;font-weight:500;background:var(--surface);
-    border:1px solid var(--border);padding:6px 12px;border-radius:999px;cursor:pointer;max-width:320px;}
-  .jobpill.show{display:inline-flex;}
-  .jobpill span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .top{display:flex;align-items:center;gap:28px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);min-width:0;}
+  .logo{display:flex;align-items:center;gap:12px;flex:none;}
+  .mark{width:36px;height:36px;border-radius:10px;background:var(--primary);position:relative;}
+  .mark::after{content:"";position:absolute;inset:11px;border-radius:50%;background:var(--surface);}
+  .logo .name{font-weight:700;font-size:18px;letter-spacing:.04em;line-height:1.1;}
+  .logo .sub{font-size:12px;color:var(--text-2);line-height:1.2;}
+  .tabs{display:flex;align-self:stretch;gap:2px;min-width:0;}
+  .tabs a{display:flex;align-items:center;gap:8px;padding:0 16px;color:var(--text-2);font-weight:500;text-decoration:none;
+    border-bottom:2px solid transparent;white-space:nowrap;transition:.15s;}
+  .tabs a svg{width:18px;height:18px;}
+  .tabs a:hover{color:var(--text);background:var(--bg);}
+  .tabs a.active{color:var(--text);border-bottom-color:var(--primary);}
+  .status{margin-left:auto;display:flex;align-items:center;gap:10px;border:1px solid var(--border);background:var(--elevated);
+    border-radius:var(--radius);padding:7px 14px;min-width:0;max-width:340px;cursor:default;}
+  .status .sdot{width:10px;height:10px;}
+  .status .k{font-size:12.5px;font-weight:600;line-height:1.2;}
+  .status .v{font:400 12px var(--mono);color:var(--text-2);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .sdot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted);}
-  [data-status=running] .sdot,[data-status=running]>.sdot{background:var(--primary);}
+  [data-status=ready] .sdot{background:var(--success);}
+  [data-status=cpu] .sdot{background:var(--warning);}
+  [data-status=running] .sdot{background:var(--primary);}
   [data-status=done] .sdot{background:var(--success);}
   [data-status=error] .sdot{background:var(--error);}
 
-  /* ── workspace ── */
-  .content{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;padding:20px 24px 24px;min-height:0;}
-  .viewcol{display:flex;flex-direction:column;gap:16px;min-height:0;min-width:0;}
-  /* Light, slightly vignetted stage so realistic anatomy colours stay dominant. */
-  .stage{position:relative;flex:1;min-height:360px;border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;
+  /* ── three-column workbench ── */
+  .work{display:grid;grid-template-columns:340px minmax(0,1fr) 360px;gap:16px;padding:16px;min-height:0;}
+  .col{display:flex;flex-direction:column;gap:16px;min-height:0;overflow:auto;padding:2px;}
+  .card{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow);}
+  .card-h{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border);}
+  .card-h .ico{width:28px;height:28px;border-radius:8px;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;}
+  .card-h .ico svg{width:16px;height:16px;stroke:var(--primary-hover);}
+  .card-h h2{font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;}
+  .card-h .aside{margin-left:auto;font:400 12px var(--mono);color:var(--text-2);}
+  .card-b{padding:14px 16px;}
+  .muted{color:var(--text-2);font-size:13px;}
+  .note{color:var(--text-2);font-size:12px;line-height:1.45;}
+
+  /* dataset */
+  .dsselect{appearance:none;-webkit-appearance:none;width:100%;border:1px solid transparent;border-radius:10px;cursor:pointer;
+    background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+    padding:4px 30px 4px 6px;margin-left:-6px;font:600 17px var(--font);transition:.15s;}
+  .dsselect:hover{border-color:var(--border);}
+  .dsmeta{display:flex;flex-wrap:wrap;gap:4px 10px;font:400 12.5px var(--mono);color:var(--text-2);margin:4px 0 10px;}
+  .dsmeta span+span::before{content:"|";margin-right:10px;color:var(--border);}
+  .okline{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .okline .chk{width:18px;height:18px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;}
+  .okline .chk svg{width:11px;height:11px;stroke:#fff;}
+  .okline.warn .chk{background:var(--warning);}
+
+  /* structures */
+  .search{width:100%;border:1px solid var(--border);border-radius:10px;padding:7px 11px;font-size:13px;margin-bottom:6px;}
+  .search::placeholder{color:var(--muted);}
+  .search:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  input[type=checkbox]{accent-color:var(--primary);width:16px;height:16px;cursor:pointer;flex:none;}
+  .catrow{display:flex;align-items:center;gap:10px;padding:7px 4px;border-radius:8px;}
+  .catrow:hover{background:var(--bg);}
+  .sw{flex:none;width:12px;height:12px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(31,41,51,.12);}
+  .catname{flex:1;min-width:0;background:none;border:none;text-align:left;font-weight:500;cursor:pointer;padding:0;}
+  .cnt{font:400 12px var(--mono);color:var(--text-2);}
+  .exp{background:none;border:none;cursor:pointer;width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-2);}
+  .exp:hover{background:var(--surface);color:var(--text);}
+  .exp svg{width:14px;height:14px;transition:transform .15s;}
+  .cat.open .exp svg{transform:rotate(180deg);}
+  .items{display:none;padding:0 0 6px 30px;}
+  .cat.open .items{display:block;}
+  .srow{display:flex;align-items:center;gap:9px;padding:4px 6px;border-radius:7px;cursor:pointer;font-size:13px;}
+  .srow:hover{background:var(--bg);}
+  .srow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .srow .vol{font:400 11.5px var(--mono);color:var(--text-2);white-space:nowrap;}
+  .flag{flex:none;width:7px;height:7px;border-radius:50%;background:var(--warning);}
+
+  /* pipeline */
+  .field{display:grid;grid-template-columns:1fr 1.2fr;align-items:center;gap:10px;margin-top:10px;font-size:13px;color:var(--text-2);}
+  .field select,.field input[type=text]{width:100%;border:1px solid var(--border);border-radius:9px;padding:7px 10px;font-size:13px;color:var(--text);background:var(--surface);}
+  .field select:focus,.field input[type=text]:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .dropzone{display:flex;align-items:center;gap:10px;border:1.5px dashed var(--border);border-radius:10px;padding:10px 12px;
+    cursor:pointer;background:var(--elevated);transition:.15s;}
+  .dropzone:hover,.dropzone.hover{border-color:var(--primary);background:var(--primary-soft);}
+  .dropzone .di{width:32px;height:32px;border-radius:50%;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;}
+  .dropzone .di svg{width:16px;height:16px;stroke:var(--primary-hover);}
+  .dropzone strong{font-size:13px;font-weight:600;display:block;line-height:1.3;word-break:break-all;}
+  .dropzone span{font-size:12px;color:var(--text-2);}
+  .switch{position:relative;width:36px;height:20px;flex:none;}
+  .switch input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer;}
+  .switch i{position:absolute;inset:0;border-radius:999px;background:var(--border);transition:.15s;pointer-events:none;}
+  .switch i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 2px rgba(31,41,51,.2);transition:.15s;}
+  .switch input:checked+i{background:var(--primary);}
+  .switch input:checked+i::after{transform:translateX(16px);}
+  .switch input:focus-visible+i{outline:2px solid var(--primary);outline-offset:2px;}
+  .togrow{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:13px;color:var(--text-2);}
+  /* Dark text on orange: white on #FF7A18 is 2.6:1 and fails WCAG AA; #1F2933 is 5.7:1. */
+  .btn-primary{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;background:var(--primary);
+    color:var(--text);border:none;border-radius:11px;padding:12px 16px;font-weight:600;cursor:pointer;transition:.15s;}
+  .btn-primary svg{width:14px;height:14px;fill:currentColor;}
+  .btn-primary:hover:not(:disabled){background:var(--primary-hover);}
+  .btn-primary:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;}
+  details.est{margin-top:10px;font-size:12.5px;}
+  details.est summary{cursor:pointer;color:var(--text-2);list-style:none;display:flex;justify-content:space-between;}
+  details.est summary::-webkit-details-marker{display:none;}
+  details.est summary b{font:500 12.5px var(--mono);color:var(--text);}
+  .esttable{margin-top:8px;background:var(--elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+  .esttable table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .esttable td{padding:2px 0;}
+  .esttable td.t{text-align:right;font:400 12px var(--mono);white-space:nowrap;}
+  .esttable .tot td{border-top:1px solid var(--border);padding-top:6px;font-weight:600;}
+  .esttable .note{margin-top:6px;}
+  .esttable .note.warn{background:var(--warning-bg);color:var(--text);border-radius:var(--radius-sm);padding:7px 9px;border-left:3px solid var(--warning);}
+  .job{margin-top:12px;display:none;}
+  .job.show{display:block;}
+  .jobline{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;}
+  .bar{height:6px;background:var(--bg);border-radius:999px;overflow:hidden;margin:8px 0 4px;}
+  .bar>i{display:block;height:100%;width:5%;background:var(--primary);border-radius:999px;transition:width .4s;}
+  .jobstep{font:400 11.5px var(--mono);color:var(--text-2);}
+  details.logwrap summary{cursor:pointer;font-size:12px;color:var(--text-2);margin-top:6px;}
+  .log{font:400 11px/1.5 var(--mono);color:var(--text-2);background:var(--elevated);border:1px solid var(--border);
+    border-radius:9px;padding:8px 10px;margin-top:6px;max-height:160px;overflow:auto;white-space:pre-wrap;}
+
+  /* ── centre: tool rail + stage + view strip ── */
+  .center{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:16px;min-height:0;min-width:0;}
+  .viewer{display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;min-height:0;}
+  .toolrail{display:flex;flex-direction:column;gap:8px;}
+  .tool{height:66px;border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);border:1px solid transparent;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:500;
+    color:var(--text-2);cursor:pointer;transition:.15s;}
+  .tool svg{width:20px;height:20px;}
+  .tool:hover{color:var(--text);border-color:var(--border);}
+  .tool.active{background:var(--primary-soft);color:var(--text);border-color:var(--primary);}
+  .stage{position:relative;border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;min-height:340px;
     background:radial-gradient(ellipse at 50% 42%,#FFFFFF 0%,#F3F2EF 55%,#E6E4DF 100%);}
+  .stage.bg-white{background:#FFFFFF;}
+  .stage.bg-slate{background:radial-gradient(ellipse at 50% 42%,#2E3A47 0%,#1F2933 70%);}
   #canvasHost{position:absolute;inset:0;}
   #canvasHost canvas{display:block;}
   .stage-title{position:absolute;top:16px;left:18px;pointer-events:none;}
   .stage-title .t{font-weight:600;font-size:15px;}
   .stage-title .s{font:400 12px var(--mono);color:var(--text-2);}
-  .tools{position:absolute;top:14px;right:14px;display:flex;gap:8px;}
-  .tool{background:rgba(255,255,255,.88);border:1px solid var(--border);border-radius:10px;height:34px;padding:0 12px;
-    font-size:12.5px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;backdrop-filter:blur(6px);transition:.15s;}
-  .tool svg{width:15px;height:15px;}
-  .tool:hover{border-color:var(--primary);background:#fff;}
-  .tool:focus-visible{outline:none;box-shadow:0 0 0 2px var(--primary);}
+  .stage.bg-slate .stage-title .t{color:#fff;}
+  .stage.bg-slate .stage-title .s,.stage.bg-slate .hint{color:#C3CAD4;}
   .hint{position:absolute;left:18px;bottom:14px;font-size:12px;color:var(--text-2);pointer-events:none;}
-  .loading{position:absolute;right:16px;bottom:14px;font:500 12px var(--mono);color:var(--text-2);background:rgba(255,255,255,.9);
-    padding:4px 10px;border-radius:999px;border:1px solid var(--border);display:none;}
-  .empty-stage{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  .loading{position:absolute;left:50%;top:16px;transform:translateX(-50%);font:500 12px var(--mono);color:var(--text-2);
+    background:rgba(255,255,255,.92);padding:4px 11px;border-radius:999px;border:1px solid var(--border);display:none;}
+  .viewpanel{position:absolute;right:14px;bottom:14px;width:176px;background:rgba(255,255,255,.94);border:1px solid var(--border);
+    border-radius:var(--radius);padding:12px;backdrop-filter:blur(8px);box-shadow:var(--shadow);}
+  .viewpanel .lbl{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);margin-bottom:6px;}
+  .viewpanel .lbl+*{margin-bottom:12px;}
+  .radio{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer;}
+  .radio input{accent-color:var(--primary);width:15px;height:15px;cursor:pointer;}
+  .range{display:flex;align-items:center;gap:8px;}
+  .range input{flex:1;accent-color:var(--primary);}
+  .range output{font:400 12px var(--mono);color:var(--text-2);width:28px;text-align:right;}
+  .swatches{display:flex;gap:8px;margin-bottom:0!important;}
+  .swatch{width:26px;height:26px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;}
+  .swatch[aria-pressed=true]{box-shadow:0 0 0 2px var(--primary);}
+  .imgview{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:52px 20px 20px;background:#1F2933;}
+  .imgview img{max-width:100%;max-height:100%;border-radius:8px;}
+  .stage.images .imgview{display:flex;}
+  .stage.images #canvasHost,.stage.images .viewpanel,.stage.images .hint{display:none;}
+  .stage.images .stage-title .t{color:#fff;}
+  .stage.images .stage-title .s{color:#C3CAD4;}
+  .empty-stage{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;
     text-align:center;color:var(--text-2);padding:24px;}
-  .empty-stage strong{color:var(--text);font-size:16px;font-weight:600;}
+  .empty-stage strong{color:var(--text);font-size:16px;}
   .stage.is-empty .empty-stage{display:flex;}
-  .stage.is-empty .tools,.stage.is-empty .hint{display:none;}
+  .stage.is-empty .viewpanel,.stage.is-empty .hint{display:none;}
 
-  .strip{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:14px 16px;display:flex;
-    align-items:center;gap:16px;min-width:0;}
-  .strip .label{flex:none;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-2);width:74px;line-height:1.3;}
-  .thumbs{display:flex;gap:10px;overflow-x:auto;flex:1;padding-bottom:2px;}
-  .thumbs img{height:72px;width:auto;border-radius:10px;border:1px solid var(--border);cursor:zoom-in;background:var(--text);flex:none;transition:.15s;}
-  .thumbs img:hover{border-color:var(--primary);}
-  .thumbs .none{color:var(--muted);font-size:13px;}
+  .strip{display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .viewtabs{display:flex;gap:8px;}
+  .vtab{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:10px;border:1px solid var(--border);
+    background:var(--surface);font-weight:500;color:var(--text-2);cursor:pointer;transition:.15s;}
+  .vtab svg{width:16px;height:16px;}
+  .vtab:hover{color:var(--text);}
+  .vtab[aria-selected=true]{border-color:var(--primary);background:var(--primary-soft);color:var(--text);}
+  .vtab:disabled{opacity:.5;cursor:not-allowed;}
+  .thumbs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(170px,1fr);gap:12px;overflow-x:auto;padding:2px 2px 4px;}
+  .thumb{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:8px;cursor:pointer;border:1px solid transparent;
+    text-align:left;transition:.15s;}
+  .thumb:hover{border-color:var(--border);}
+  .thumb[aria-current=true]{border-color:var(--primary);}
+  .thumb .tt{font-size:12px;font-weight:500;color:var(--text-2);margin:0 2px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .thumb img{display:block;width:100%;height:92px;object-fit:cover;border-radius:8px;background:#1F2933;}
+  .thumbs .none{color:var(--muted);font-size:13px;padding:8px 2px;}
 
-  /* ── inspector ── */
-  .inspector{display:flex;flex-direction:column;gap:16px;min-height:0;overflow:auto;padding:2px;}
-  .card{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:18px;}
-  .card h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-2);display:flex;
-    align-items:center;gap:8px;margin-bottom:12px;}
-  .card h2 .count{font:500 12px var(--mono);letter-spacing:0;color:var(--text-2);}
-  .card h2 .acts{margin-left:auto;display:flex;gap:4px;}
-  .linkbtn{background:none;border:none;font-size:12px;font-weight:500;color:var(--text-2);cursor:pointer;padding:2px 6px;border-radius:6px;
-    text-transform:none;letter-spacing:0;}
-  .linkbtn:hover{color:var(--text);background:var(--bg);}
-  .search{width:100%;border:1px solid var(--border);border-radius:10px;padding:8px 11px;font:400 13px var(--font);color:var(--text);
-    margin-bottom:10px;background:var(--surface);}
-  .search::placeholder{color:var(--muted);}
-  .search:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
-  .grp{border-top:1px solid var(--border);}
-  .grp:first-of-type{border-top:none;}
-  .ghead{display:flex;align-items:center;gap:8px;padding:8px 2px;}
-  .gtoggle{flex:1;display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;text-align:left;padding:2px 0;}
-  .gtoggle .gname{font-weight:600;font-size:13px;}
-  .gtoggle .gcount{font:400 12px var(--mono);color:var(--text-2);}
-  .gtoggle svg{width:14px;height:14px;color:var(--text-2);margin-left:auto;transition:transform .15s;}
-  .grp.collapsed .gtoggle svg{transform:rotate(-90deg);}
-  .grp.collapsed .glist{display:none;}
-  .eye{background:none;border:none;cursor:pointer;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;
-    justify-content:center;color:var(--text-2);}
-  .eye:hover{background:var(--bg);color:var(--text);}
-  .eye svg{width:16px;height:16px;}
-  .grp.hidden-all .eye{color:var(--muted);}
-  .dot{flex:none;width:10px;height:10px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(31,41,51,.12);}
-  .glist{padding:0 0 8px;}
-  .srow{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:8px;cursor:pointer;user-select:none;}
-  .srow:hover,.srow:focus-visible{background:var(--bg);outline:none;}
-  .srow .sname{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .srow .vol{margin-left:auto;font:400 12px var(--mono);color:var(--text-2);white-space:nowrap;}
-  .srow.off .sname,.srow.off .vol{color:var(--muted);text-decoration:line-through;}
-  .srow.off .dot{opacity:.35;}
-  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;}
-  .kv dt{color:var(--text-2);}
-  .kv dd{font:400 12.5px/1.6 var(--mono);text-align:right;}
-  details.raw{margin-top:12px;font-size:12.5px;}
-  details.raw summary{cursor:pointer;color:var(--text-2);font-weight:500;}
-  details.raw pre{font:400 11.5px/1.55 var(--mono);color:var(--text-2);background:var(--elevated);border:1px solid var(--border);
-    border-radius:10px;padding:10px 12px;margin-top:8px;max-height:220px;overflow:auto;white-space:pre-wrap;}
-  .muted{color:var(--text-2);font-size:13px;}
-
-  /* ── upload drawer ── */
-  .scrim{position:fixed;inset:0;background:rgba(31,41,51,.28);opacity:0;pointer-events:none;transition:.2s;z-index:40;}
-  .scrim.open{opacity:1;pointer-events:auto;}
-  .drawer{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:100%;background:var(--surface);
-    box-shadow:-12px 0 32px rgba(31,41,51,.12);transform:translateX(100%);transition:transform .25s ease;z-index:41;
-    display:flex;flex-direction:column;}
-  .drawer.open{transform:none;}
-  .drawer>header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);}
-  .drawer>header h2{font-size:16px;font-weight:600;}
-  .iconbtn{background:none;border:none;cursor:pointer;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;
-    justify-content:center;color:var(--text-2);}
-  .iconbtn:hover{background:var(--bg);color:var(--text);}
-  .iconbtn svg{width:18px;height:18px;}
-  .drawer .dbody{padding:20px 22px 28px;overflow:auto;flex:1;}
-  .field-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-2);margin:18px 0 0;}
-  #drop{border:1.5px dashed var(--border);border-radius:var(--radius);padding:28px 18px;text-align:center;cursor:pointer;
-    transition:.15s;background:var(--elevated);}
-  #drop:hover,#drop.hover{border-color:var(--primary);background:var(--primary-soft);}
-  #drop .big{width:46px;height:46px;margin:0 auto 10px;border-radius:50%;background:var(--primary-soft);display:flex;
-    align-items:center;justify-content:center;}
-  #drop .big svg{width:22px;height:22px;stroke:var(--primary-hover);}
-  #drop strong{font-weight:600;}
-  #drop p{color:var(--text-2);margin-top:4px;font-size:13px;}
-  .dbody input[type=text],.dbody select{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);
-    padding:10px 12px;border-radius:10px;margin-top:10px;font:400 14px var(--font);transition:.15s;}
-  .dbody input[type=text]::placeholder{color:var(--muted);}
-  .dbody input[type=text]:focus,.dbody select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
-  input[type=checkbox]{accent-color:var(--primary);width:15px;height:15px;}
-  #go{width:100%;justify-content:center;margin-top:16px;padding:11px 16px;}
-  .job{margin-top:18px;font-size:13px;}
-  #jobmsg{display:flex;align-items:center;gap:8px;font-weight:500;}
-  .bar{height:6px;background:var(--bg);border-radius:999px;overflow:hidden;margin:10px 0 6px;}
-  .bar>i{display:block;height:100%;width:30%;background:var(--primary);border-radius:999px;transition:width .4s;}
-  .log{font:400 11.5px/1.55 var(--mono);color:var(--text-2);background:var(--elevated);border:1px solid var(--border);
-    border-radius:10px;padding:10px 12px;margin-top:10px;max-height:200px;overflow:auto;white-space:pre-wrap;}
-  .est{background:var(--elevated);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
-  .est h4{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);margin-bottom:8px;}
-  .est table{width:100%;border-collapse:collapse;font-size:13px;}
-  .est td{padding:3px 0;color:var(--text);}
-  .est td.t{text-align:right;font:400 12.5px var(--mono);white-space:nowrap;}
-  .est .tot td{border-top:1px solid var(--border);padding-top:7px;font-weight:600;}
-  .est .tot td.t{font-weight:500;box-shadow:inset 3px 0 0 var(--primary);padding-left:8px;}
-  .est .note{color:var(--text-2);font-size:11.5px;margin-top:8px;line-height:1.45;}
-  .est .note.warn{background:var(--warning-bg);color:var(--text);border-radius:var(--radius-sm);padding:8px 10px;border-left:3px solid var(--warning);}
+  /* ── right: checks + reliability + metrics ── */
+  .meter{display:grid;grid-template-columns:1fr 92px 52px;align-items:center;gap:10px;padding:6px 0;font-size:13px;}
+  .meter .trk{height:8px;border-radius:999px;background:var(--bg);overflow:hidden;}
+  .meter .trk i{display:block;height:100%;border-radius:999px;background:var(--success);}
+  .meter .trk i.mid{background:var(--warning);}
+  .meter .trk i.low{background:var(--error);}
+  .meter .pct{font:500 12.5px var(--mono);text-align:right;}
+  .meter .sub{grid-column:1/-1;font:400 11.5px var(--mono);color:var(--text-2);margin-top:-4px;}
+  .kvs{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:13px;margin-top:8px;}
+  .kvs dt{color:var(--text-2);}
+  .kvs dd{font:400 12.5px var(--mono);text-align:right;}
+  .sect{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);margin:2px 0 6px;}
+  .sect small{text-transform:none;letter-spacing:0;font-weight:400;}
+  .rrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 10px;border:1px solid var(--border);
+    border-radius:9px;font-size:13px;margin-bottom:6px;}
+  .rrow .val{font:400 12.5px var(--mono);color:var(--muted);}
+  .pill{font-size:11.5px;font-weight:500;color:var(--text-2);background:var(--bg);border-radius:999px;padding:2px 9px;white-space:nowrap;}
+  .callout{background:var(--elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px;
+    color:var(--text-2);line-height:1.45;margin-bottom:12px;}
+  .mtable{width:100%;border-collapse:collapse;font-size:13px;}
+  .mtable th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);text-align:right;padding:4px 0 6px;}
+  .mtable th:first-child{text-align:left;}
+  .mtable td{padding:6px 0;border-top:1px solid var(--border);}
+  .mtable td+td{text-align:right;font:400 12.5px var(--mono);}
 
   #lightbox{position:fixed;inset:0;background:rgba(31,41,51,.88);display:none;align-items:center;justify-content:center;z-index:60;cursor:zoom-out;}
   #lightbox img{max-width:94%;max-height:94%;border-radius:var(--radius);}
 
-  @media (max-width:1100px){
+  @media (max-width:1240px){
     .app{height:auto;min-height:100vh;}
-    .content{grid-template-columns:1fr;}
-    .stage{flex:none;height:58vh;}
-    .inspector{overflow:visible;}
+    .work{grid-template-columns:320px minmax(0,1fr);}
+    .col.right{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));align-items:start;}
+    .stage{height:60vh;}
+    .col{overflow:visible;}
   }
-  @media (max-width:760px){
-    .brand,.topbar .sep,#dsmeta{display:none;}
-    .topbar{padding:0 14px;}
-    .content{padding:14px;}
+  @media (max-width:860px){
+    .work{grid-template-columns:1fr;}
+    .tabs,.logo .sub{display:none;}
+    .viewer{grid-template-columns:1fr;}
+    .toolrail{flex-direction:row;overflow-x:auto;}
+    .tool{min-width:70px;height:56px;}
   }
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- ── icon rail ── -->
-  <nav class="rail" aria-label="Main">
-    <div class="mark" aria-hidden="true"></div>
-    <a class="navbtn active" href="/" aria-current="page" aria-label="Workspace">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
-      <span class="tip">Workspace</span></a>
-    <button class="navbtn" id="railUpload" aria-label="New scan">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      <span class="tip">New scan</span></button>
-    <a class="navbtn" href="/brain.html" aria-label="Neuroplasticity Explorer">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a14 14 0 000 18M12 3a14 14 0 010 18M3 12h18"/></svg>
-      <span class="tip">Neuroplasticity Explorer</span></a>
-    <div class="grow"></div>
-    <div class="devdot" id="devdot" title="Device"></div>
-  </nav>
+  <!-- ── top bar ── -->
+  <header class="top">
+    <div class="logo"><div class="mark" aria-hidden="true"></div>
+      <div><div class="name">MEDSYS</div><div class="sub">Medical 3D reconstruction</div></div></div>
+    <nav class="tabs" aria-label="Main">
+      <a class="active" href="/" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg>Workbench</a>
+      <a href="/brain.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a14 14 0 000 18M12 3a14 14 0 010 18M3 12h18"/></svg>Neuroplasticity Explorer</a>
+    </nav>
+    <div class="status" id="status" data-status="idle" aria-live="polite">
+      <span class="sdot"></span>
+      <div style="min-width:0"><div class="k" id="statusK">Connecting…</div><div class="v" id="statusV">checking device</div></div>
+    </div>
+  </header>
 
-  <div class="main">
-    <!-- ── top bar ── -->
-    <header class="topbar">
-      <span class="brand">MEDSYS</span>
-      <span class="sep"></span>
-      <select class="dsselect" id="dsSelect" aria-label="Dataset"><option>Loading…</option></select>
-      <span class="tag" id="dsmeta" style="display:none"></span>
-      <div class="right">
-        <button class="jobpill" id="jobpill" data-status="running"><span class="sdot"></span><span id="jobpilltext"></span></button>
-        <span class="tag" id="devbadge">device: …</span>
-        <button class="btn-primary" id="newScan">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          New scan</button>
-      </div>
-    </header>
+  <main class="work">
+    <!-- ── left: dataset, structures, pipeline ── -->
+    <div class="col left">
+      <section class="card">
+        <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>
+          <h2>Dataset</h2><span class="aside" id="dsCount"></span></div>
+        <div class="card-b">
+          <select class="dsselect" id="dsSelect" aria-label="Dataset"><option>Loading…</option></select>
+          <div class="dsmeta" id="dsMeta"></div>
+          <div class="okline" id="dsOk" style="display:none"><span class="chk"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></span><span id="dsOkText"></span></div>
+        </div>
+      </section>
 
-    <!-- ── workspace ── -->
-    <div class="content">
-      <div class="viewcol">
-        <section class="stage" id="stage" aria-label="3D viewer">
-          <div id="canvasHost"></div>
-          <div class="stage-title"><div class="t" id="stageTitle"></div><div class="s" id="stageSub"></div></div>
-          <div class="tools">
-            <button class="tool" id="resetView"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.7 2.7L3 8"/><path d="M3 3v5h5"/></svg>Reset view</button>
-          </div>
-          <div class="hint">Drag to rotate · scroll to zoom · right-drag to pan</div>
-          <div class="loading" id="loading"></div>
-          <div class="empty-stage" id="emptyStage">
-            <strong>No scans yet</strong>
-            <span>Upload a zip of DICOM files to build your first 3D model.</span>
-            <button class="btn-primary" id="emptyUpload">Upload a scan</button>
-          </div>
-        </section>
-        <section class="strip" aria-label="Slices and renders">
-          <div class="label">Slices &amp; renders</div>
-          <div class="thumbs" id="thumbs"><span class="none">—</span></div>
-        </section>
-      </div>
-
-      <aside class="inspector" aria-label="Inspector">
-        <section class="card">
-          <h2>Structures <span class="count" id="structCount"></span>
-            <span class="acts"><button class="linkbtn" id="showAll">Show all</button><button class="linkbtn" id="hideAll">Hide all</button></span></h2>
+      <section class="card">
+        <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+          <h2>Structures</h2><span class="aside" id="structCount"></span></div>
+        <div class="card-b">
           <input class="search" id="structSearch" type="search" placeholder="Filter structures" aria-label="Filter structures">
           <div id="structList"><p class="muted">Select a scan to see its structures.</p></div>
-        </section>
-        <section class="card">
-          <h2>Scan</h2>
-          <dl class="kv" id="scanKv"></dl>
-          <p class="muted" id="scanEmpty">No report for this scan.</p>
-          <details class="raw" id="rawWrap" style="display:none"><summary>Raw report</summary><pre id="rawReport"></pre></details>
-        </section>
-      </aside>
-    </div>
-  </div>
-</div>
+        </div>
+      </section>
 
-<!-- ── upload drawer ── -->
-<div class="scrim" id="scrim"></div>
-<aside class="drawer" id="drawer" aria-label="New scan" aria-hidden="true">
-  <header><h2>New scan</h2>
-    <button class="iconbtn" id="closeDrawer" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-  </header>
-  <div class="dbody">
-    <div id="drop">
-      <div class="big"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg></div>
-      <strong>Drop a .zip of DICOM files</strong>
-      <p>or click to browse</p>
-      <input type="file" id="file" accept=".zip" hidden>
+      <section class="card" id="pipelineCard">
+        <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></span>
+          <h2>Pipeline</h2></div>
+        <div class="card-b">
+          <div class="dropzone" id="drop" role="button" tabindex="0" aria-label="Choose a DICOM zip">
+            <span class="di"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg></span>
+            <div style="min-width:0"><strong id="dropName">Choose a DICOM .zip</strong><span>or drop it here</span></div>
+            <input type="file" id="file" accept=".zip" hidden>
+          </div>
+          <label class="field">Dataset name<input type="text" id="name" placeholder="optional"></label>
+          <label class="field">Segmentation engine
+            <select id="engine">
+              <option value="heuristic">Classical (fast)</option>
+              <option value="totalseg" id="engineTotalseg">TotalSegmentator</option>
+            </select></label>
+          <p id="engineNote" class="note" style="display:none;margin-top:6px">TotalSegmentator isn't installed on this deployment.</p>
+          <label class="field">Modality
+            <select id="modality">
+              <option value="">Auto-detect</option>
+              <option value="CT">CT</option>
+              <option value="MR">MR (brain)</option>
+              <option value="PT">PET</option>
+            </select></label>
+          <div class="togrow"><span>Skip MedSAM (faster MRI)</span><label class="switch"><input type="checkbox" id="fast" aria-label="Skip MedSAM"><i></i></label></div>
+          <button class="btn-primary" id="go" disabled><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>Run pipeline</button>
+          <details class="est" id="estWrap"><summary><span>Estimated time</span><b id="estSummary">—</b></summary><div class="esttable" id="estimate"></div></details>
+          <div class="job" id="job">
+            <div class="jobline" id="jobmsg" data-status="running"><span class="sdot"></span><span id="jobmsgtext">Queued…</span></div>
+            <div class="bar"><i id="barfill"></i></div>
+            <div class="jobstep" id="jobstep"></div>
+            <details class="logwrap"><summary>Show log</summary><div class="log" id="joblog"></div></details>
+          </div>
+        </div>
+      </section>
     </div>
-    <p class="field-label">Settings</p>
-    <input type="text" id="name" placeholder="Dataset name (optional)">
-    <select id="engine">
-      <option value="heuristic">Fast engine (heuristic — lungs/bone/organs blobs)</option>
-      <option value="totalseg" id="engineTotalseg">AI organs (TotalSegmentator — 100+ structures)</option>
-    </select>
-    <p id="engineNote" style="display:none;font-size:11.5px;color:var(--text-2);margin-top:6px">
-      AI organs engine isn't available on this deployment (needs torch + TotalSegmentator).
-      Run the full stack locally or on a VPS to use it — see the README.
-    </p>
-    <select id="modality">
-      <option value="">Auto-detect modality</option>
-      <option value="CT">CT</option>
-      <option value="MR">MR (brain)</option>
-      <option value="PT">PET</option>
-    </select>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--text-2);cursor:pointer;">
-      <input type="checkbox" id="fast"> Fast mode (skip MedSAM — brain finishes ~3× faster)
-    </label>
-    <button class="btn-primary" id="go" disabled>Segment</button>
-    <div id="estimate" style="margin-top:16px;"></div>
-    <div class="job" id="job" style="display:none">
-      <div id="jobmsg" data-status="running"><span class="sdot"></span><span id="jobmsgtext">Queued…</span></div>
-      <div class="bar"><i id="barfill"></i></div>
-      <div id="jobstep" style="font:400 12px var(--mono);color:var(--text-2);margin-top:4px;"></div>
-      <div class="log" id="joblog"></div>
+
+    <!-- ── centre: tools, 3D stage, views ── -->
+    <div class="center">
+      <div class="viewer">
+        <div class="toolrail" role="toolbar" aria-label="View tools">
+          <button class="tool active" data-mode="rotate" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Rotate</button>
+          <button class="tool" data-mode="pan" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>Pan</button>
+          <button class="tool" data-mode="zoom" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5M11 8v6M8 11h6"/></svg>Zoom</button>
+          <button class="tool" id="resetView"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.7 2.7L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>
+          <button class="tool" id="snapshot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Snapshot</button>
+        </div>
+        <section class="stage" id="stage" aria-label="3D viewer">
+          <div id="canvasHost"></div>
+          <div class="imgview" id="imgview"><img id="imgviewImg" alt=""></div>
+          <div class="stage-title"><div class="t" id="stageTitle"></div><div class="s" id="stageSub"></div></div>
+          <div class="loading" id="loading"></div>
+          <div class="hint" id="hint">Drag to rotate · scroll to zoom</div>
+          <div class="viewpanel" id="viewpanel">
+            <div class="lbl">Display</div>
+            <div role="radiogroup" aria-label="Display">
+              <label class="radio"><input type="radio" name="render" value="surface" checked>Surface</label>
+              <label class="radio"><input type="radio" name="render" value="wireframe">Wireframe</label>
+              <label class="radio"><input type="radio" name="render" value="xray">X-ray</label>
+            </div>
+            <div class="lbl">Opacity</div>
+            <div class="range"><input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1" aria-label="Opacity"><output id="opacityOut">1.0</output></div>
+            <div class="lbl">Background</div>
+            <div class="swatches">
+              <button class="swatch" data-bg="" aria-pressed="true" title="Studio" aria-label="Studio background" style="background:radial-gradient(circle,#fff,#E6E4DF)"></button>
+              <button class="swatch" data-bg="bg-white" aria-pressed="false" title="White" aria-label="White background" style="background:#fff"></button>
+              <button class="swatch" data-bg="bg-slate" aria-pressed="false" title="Slate" aria-label="Slate background" style="background:#1F2933"></button>
+            </div>
+          </div>
+          <div class="empty-stage"><strong>No scans yet</strong><span>Choose a DICOM zip in the Pipeline panel to build your first 3D model.</span></div>
+        </section>
+      </div>
+      <div class="strip">
+        <div class="viewtabs" role="tablist" aria-label="View">
+          <button class="vtab" role="tab" id="tab3d" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 22V12M21 7l-9 5-9-5"/></svg>3D model</button>
+          <button class="vtab" role="tab" id="tabImg" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg>Slices &amp; renders</button>
+        </div>
+        <div class="thumbs" id="thumbs"><span class="none">—</span></div>
+      </div>
     </div>
-  </div>
-</aside>
+
+    <!-- ── right: mesh checks, reliability, metrics ── -->
+    <div class="col right">
+      <section class="card">
+        <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span>
+          <h2>Mesh checks</h2><span class="aside" id="checkState"></span></div>
+        <div class="card-b" id="checks"><p class="muted">Runs in your browser once the model loads.</p></div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 20h18M6 16l4-6 4 3 5-8"/></svg></span>
+          <h2>Reliability estimate</h2><span class="aside"><span class="pill">Not available yet</span></span></div>
+        <div class="card-b">
+          <p class="callout">MEDSYS can't yet predict how far a mesh is from the true anatomy. That needs the reliability model from the research plan. Until then these stay empty rather than guessed.</p>
+          <div class="sect">Predicted error <small>(95% interval)</small></div>
+          <div class="rrow"><span>ASSD</span><span class="val">—</span></div>
+          <div class="rrow"><span>HD95</span><span class="val">—</span></div>
+          <div class="rrow"><span>Volume error</span><span class="val">—</span></div>
+          <div class="sect" style="margin-top:12px">Task suitability</div>
+          <div class="rrow"><span>Visualization</span><span class="pill">Not assessed</span></div>
+          <div class="rrow"><span>VR and education</span><span class="pill">Not assessed</span></div>
+          <div class="rrow"><span>Surgical planning</span><span class="pill">Not assessed</span></div>
+          <div class="rrow" style="margin-bottom:0"><span>Precision measurement</span><span class="pill">Not assessed</span></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+          <h2>Metrics vs reference</h2></div>
+        <div class="card-b" id="metrics"><p class="muted">Select a scan.</p></div>
+      </section>
+    </div>
+  </main>
+</div>
 
 <div id="lightbox"><img id="lbimg" alt=""></div>
 
@@ -351,8 +424,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // ---------- anatomy: category + colour ----------
 // Brand anatomy palette, matched by structure name. Order matters: vessels
@@ -384,8 +459,8 @@ function anatomyOf(label){
   return {cat:'Other organs', color:FALLBACK[h % FALLBACK.length]};
 }
 const pretty = s => { const t = s.replace(/_/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); };
+const labelOf = path => path.split('/').pop().replace(/\.stl$/i, '');
 
-// Volume for a structure, from whichever report format the pipeline wrote.
 function volumeOf(r, label){
   if (!r) return null;
   const s = r.structures && r.structures[label];
@@ -399,30 +474,9 @@ function volumeOf(r, label){
 }
 const fmtVol = v => v >= 100 ? `${Math.round(v)} cm³` : `${(+v).toFixed(1)} cm³`;
 
-// Scan details, from whichever report format the pipeline wrote.
-function scanRows(r, nMesh){
-  const rows = [], add = (k, v) => { if (v !== undefined && v !== null && v !== '') rows.push([k, String(v)]); };
-  if (!r) return rows;
-  add('Modality', {CT:'CT', MR:'MRI', PT:'PET'}[r.modality] || r.modality);
-  add('Region', r.body_part);
-  add('Engine', r.engine || 'Classical pipeline');
-  add('Device', r.device);
-  if (r.fast_mode !== undefined) add('Mode', r.fast_mode ? 'Fast (3 mm)' : 'Full (1.5 mm)');
-  if (Array.isArray(r.voxel_spacing_mm)) add('Voxel', r.voxel_spacing_mm.map(v => +(+v).toFixed(2)).join(' × ') + ' mm');
-  add('Slices', r.num_slices);
-  if (Array.isArray(r.hu_range)) add('HU range', `${r.hu_range[0]} to ${r.hu_range[1]}`);
-  if (r.runtime_sec != null) add('Runtime', (+r.runtime_sec).toFixed(1) + ' s');
-  add('Structures', r.num_structures != null ? r.num_structures : nMesh);
-  add('TBR threshold', r.tbr_threshold);
-  add('Tumour foci', r.tumor_foci);
-  if (r.tumor_volume_cm3 != null) add('Tumour volume', fmtVol(r.tumor_volume_cm3));
-  if (r.total_brain_volume_cm3 != null) add('Brain volume', fmtVol(r.total_brain_volume_cm3));
-  return rows;
-}
-
 // ---------- 3D viewer (one renderer, reused across datasets) ----------
 const host = $('canvasHost');
-const scene = new THREE.Scene();   // transparent: the .stage gradient shows through
+const scene = new THREE.Scene();   // transparent: the stage background shows through
 const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 20000);
 const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
 renderer.setClearColor(0x000000, 0);
@@ -434,7 +488,7 @@ const key = new THREE.DirectionalLight(0xffffff, .85); key.position.set(1, 1, 1)
 const fillLight = new THREE.DirectionalLight(0xfff0e3, .35); fillLight.position.set(-1, -.5, -1); scene.add(fillLight);
 const group = new THREE.Group(); scene.add(group);
 const loader = new STLLoader();
-const parts = new Map();          // label -> {mesh, mat, color, cat, row}
+const parts = new Map();          // label -> {mesh, mat, cat, color, row, check}
 let loadToken = 0;
 
 function resize(){
@@ -468,8 +522,70 @@ function frame(){
   cam.position.set(0, 0, dist); cam.near = dist / 100; cam.far = dist * 20; cam.updateProjectionMatrix();
   ctrl.target.set(0, 0, 0); ctrl.update();
 }
-$('resetView').onclick = frame;
 
+// ---------- display: render mode, opacity, background ----------
+let RENDER = 'surface', OPACITY = 1;
+function styleMaterial(p){
+  if (!p.mat) return;
+  const ctx = p.cat === 'Context';
+  const xray = RENDER === 'xray';
+  const op = ctx ? .18 : xray ? .28 * OPACITY : OPACITY;
+  p.mat.wireframe = RENDER === 'wireframe';
+  p.mat.transparent = op < 1;
+  p.mat.opacity = op;
+  p.mat.depthWrite = !(ctx || xray);
+  p.mat.side = xray ? THREE.DoubleSide : THREE.FrontSide;
+  p.mat.needsUpdate = true;
+}
+document.querySelectorAll('input[name=render]').forEach(r => r.addEventListener('change', e => {
+  RENDER = e.target.value; for (const p of parts.values()) styleMaterial(p);
+}));
+$('opacity').addEventListener('input', e => {
+  OPACITY = +e.target.value; $('opacityOut').textContent = OPACITY.toFixed(1);
+  for (const p of parts.values()) styleMaterial(p);
+});
+document.querySelectorAll('.swatch').forEach(b => b.addEventListener('click', () => {
+  const stage = $('stage');
+  stage.classList.remove('bg-white', 'bg-slate');
+  if (b.dataset.bg) stage.classList.add(b.dataset.bg);
+  document.querySelectorAll('.swatch').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+}));
+
+// ---------- tools ----------
+const MODES = {rotate:THREE.MOUSE.ROTATE, pan:THREE.MOUSE.PAN, zoom:THREE.MOUSE.DOLLY};
+const HINTS = {rotate:'Drag to rotate · scroll to zoom', pan:'Drag to pan · scroll to zoom', zoom:'Drag up or down to zoom'};
+document.querySelectorAll('.tool[data-mode]').forEach(b => b.addEventListener('click', () => {
+  ctrl.mouseButtons.LEFT = MODES[b.dataset.mode];
+  $('hint').textContent = HINTS[b.dataset.mode];
+  document.querySelectorAll('.tool[data-mode]').forEach(x => {
+    const on = x === b; x.classList.toggle('active', on); x.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}));
+$('resetView').onclick = frame;
+$('snapshot').onclick = () => {
+  renderer.render(scene, cam);   // read the buffer in the same frame it was drawn
+  const src = renderer.domElement, out = document.createElement('canvas');
+  out.width = src.width; out.height = src.height;
+  const g = out.getContext('2d');
+  const slate = $('stage').classList.contains('bg-slate');
+  g.fillStyle = slate ? '#1F2933' : '#FFFFFF'; g.fillRect(0, 0, out.width, out.height);
+  g.drawImage(src, 0, 0);
+  const a = document.createElement('a');
+  a.href = out.toDataURL('image/png'); a.download = `${$('dsSelect').value || 'medsys'}_3d.png`; a.click();
+};
+
+// ---------- view tabs: 3D model / slices & renders ----------
+function showView(which){
+  const img = which === 'images';
+  $('stage').classList.toggle('images', img);
+  $('tab3d').setAttribute('aria-selected', img ? 'false' : 'true');
+  $('tabImg').setAttribute('aria-selected', img ? 'true' : 'false');
+  if (!img) resize();
+}
+$('tab3d').onclick = () => showView('3d');
+$('tabImg').onclick = () => { const first = document.querySelector('.thumb'); if (first) first.click(); };
+
+// ---------- model loading + mesh checks ----------
 // Call after buildStructures(): it attaches each loaded mesh to its list row.
 function loadModel(ds){
   const token = ++loadToken;
@@ -479,128 +595,212 @@ function loadModel(ds){
   if (!total){ loading.style.display = 'none'; return; }
   loading.style.display = 'block'; loading.textContent = `Loading 0/${total}`;
   const finish = () => {
-    done++;
-    loading.textContent = `Loading ${done}/${total}`;
+    done++; loading.textContent = `Loading ${done}/${total}`;
     if (done === total){
       loading.style.display = failed ? 'block' : 'none';
       if (failed) loading.textContent = `${failed} mesh(es) failed to load`;
-      frame();
+      frame(); runChecks(token);
     }
   };
   ds.meshes.forEach(path => {
-    const label = path.split('/').pop().replace(/\.stl$/i, '');
+    const label = labelOf(path);
     loader.load(`/output/${encodeURIComponent(ds.name)}/${path}`, geo => {
       if (token !== loadToken){ geo.dispose(); return; }
       geo.computeVertexNormals();
-      const {cat, color} = anatomyOf(label);
-      const translucent = cat === 'Context';
-      const mat = new THREE.MeshPhongMaterial({color, shininess:25, specular:0x1a1a1a,
-        transparent:translucent, opacity:translucent ? .18 : 1, depthWrite:!translucent});
-      const mesh = new THREE.Mesh(geo, mat); group.add(mesh);
       const p = parts.get(label);
-      if (p){ p.mesh = mesh; p.mat = mat; mesh.visible = !p.row.classList.contains('off'); }
+      const mat = new THREE.MeshPhongMaterial({color:p.color, shininess:25, specular:0x1a1a1a});
+      const mesh = new THREE.Mesh(geo, mat); group.add(mesh);
+      p.mesh = mesh; p.mat = mat; mesh.visible = p.visible;
+      styleMaterial(p);
       finish();
     }, undefined, () => { if (token === loadToken){ failed++; finish(); } });
   });
 }
 
-// ---------- inspector: structures ----------
+// Topology from the triangles alone. STL repeats each vertex per triangle, so
+// positions are merged first (normals are dropped, or nothing would merge).
+function meshCheck(geo){
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', geo.getAttribute('position'));
+  const m = mergeVertices(g, 1e-5);
+  const idx = m.index.array, nV = m.getAttribute('position').count, nF = idx.length / 3;
+  const parent = new Int32Array(nV); for (let i = 0; i < nV; i++) parent[i] = i;
+  const find = x => { while (parent[x] !== x){ parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  const edges = new Map();
+  const edge = (u, v) => {
+    const k = u < v ? u * nV + v : v * nV + u;
+    edges.set(k, (edges.get(k) || 0) + 1);
+    const a = find(u), b = find(v); if (a !== b) parent[a] = b;
+  };
+  for (let f = 0; f < idx.length; f += 3){ edge(idx[f], idx[f+1]); edge(idx[f+1], idx[f+2]); edge(idx[f+2], idx[f]); }
+  let boundary = 0, nonmanifold = 0;
+  for (const c of edges.values()){ if (c === 1) boundary++; else if (c > 2) nonmanifold++; }
+  const roots = new Set(); for (let i = 0; i < nV; i++) roots.add(find(i));
+  m.dispose();
+  return {closed: boundary === 0, manifold: nonmanifold === 0, boundary, pieces: roots.size, faces: nF};
+}
+function runChecks(token){
+  const list = [...parts.entries()].filter(([, p]) => p.mesh);
+  let i = 0;
+  const step = () => {
+    if (token !== loadToken) return;
+    const t0 = performance.now();
+    while (i < list.length && performance.now() - t0 < 30){   // keep the page responsive
+      const [label, p] = list[i++];
+      p.check = meshCheck(p.mesh.geometry);
+      const issues = [];
+      if (!p.check.closed) issues.push(`open surface (${p.check.boundary} boundary edges)`);
+      if (p.check.pieces > 1) issues.push(`${p.check.pieces} separate pieces`);
+      if (!p.check.manifold) issues.push('non-manifold edges');
+      if (issues.length && p.row){
+        const f = document.createElement('span'); f.className = 'flag'; f.title = issues.join(', ');
+        f.setAttribute('aria-label', 'Mesh check: ' + issues.join(', '));
+        p.row.insertBefore(f, p.row.querySelector('.vol'));
+      }
+    }
+    $('checkState').textContent = i < list.length ? `checking ${i}/${list.length}` : '';
+    if (i < list.length) setTimeout(step, 0); else renderChecks(list.map(([, p]) => p.check));
+  };
+  $('checks').innerHTML = '<p class="muted">Checking meshes…</p>';
+  step();
+}
+function meterRow(label, n, total, sub){
+  const pct = total ? Math.round(100 * n / total) : 0;
+  const tone = pct >= 95 ? '' : pct >= 70 ? 'mid' : 'low';
+  return `<div class="meter"><span>${label}</span><span class="trk"><i class="${tone}" style="width:${pct}%"></i></span>`
+    + `<span class="pct">${pct}%</span><span class="sub">${sub}</span></div>`;
+}
+function renderChecks(checks){
+  const n = checks.length;
+  if (!n){ $('checks').innerHTML = '<p class="muted">No meshes to check.</p>'; return; }
+  const closed = checks.filter(c => c.closed).length;
+  const single = checks.filter(c => c.pieces === 1).length;
+  const manifold = checks.filter(c => c.manifold).length;
+  const faces = checks.reduce((a, c) => a + c.faces, 0);
+  $('checks').innerHTML =
+    meterRow('Closed surface', closed, n, `${closed} of ${n} have no holes`) +
+    meterRow('Single piece', single, n, `${single} of ${n} are one connected part`) +
+    meterRow('Manifold', manifold, n, `${manifold} of ${n} have no edge shared by 3+ faces`) +
+    `<dl class="kvs"><dt>Triangles</dt><dd>${faces.toLocaleString()}</dd></dl>` +
+    `<p class="note" style="margin-top:8px">Structural checks only, not accuracy. Structures with issues carry an amber dot in the list.</p>`;
+}
+
+// ---------- left: structures ----------
+const CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>';
 function setVisible(label, on){
   const p = parts.get(label); if (!p) return;
+  p.visible = on;
   if (p.mesh) p.mesh.visible = on;
-  p.row.classList.toggle('off', !on);
-  p.row.setAttribute('aria-pressed', on ? 'true' : 'false');
+  if (p.box) p.box.checked = on;
 }
-function syncGroups(){
-  document.querySelectorAll('.grp').forEach(g => {
-    const rows = [...g.querySelectorAll('.srow')];
-    g.classList.toggle('hidden-all', rows.every(r => r.classList.contains('off')));
-  });
+function syncCat(cat){
+  const boxes = [...cat.querySelectorAll('.items input')];
+  const on = boxes.filter(b => b.checked).length;
+  const head = cat.querySelector('.catrow input');
+  head.checked = on > 0; head.indeterminate = on > 0 && on < boxes.length;
 }
-const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-const CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>';
-
 function buildStructures(ds){
   const list = $('structList'); list.innerHTML = ''; $('structSearch').value = '';
+  $('structCount').textContent = ds.meshes.length ? `${ds.meshes.length} detected` : '';
+  if (!ds.meshes.length){ list.innerHTML = '<p class="muted">This scan has no 3D meshes.</p>'; return; }
   const byCat = new Map();
   ds.meshes.forEach(path => {
-    const label = path.split('/').pop().replace(/\.stl$/i, '');
-    const a = anatomyOf(label);
+    const label = labelOf(path), a = anatomyOf(label);
     if (!byCat.has(a.cat)) byCat.set(a.cat, []);
     byCat.get(a.cat).push({label, ...a, vol:volumeOf(ds.report, label)});
   });
-  $('structCount').textContent = ds.meshes.length || '';
-  if (!ds.meshes.length){ list.innerHTML = '<p class="muted">This scan has no 3D meshes.</p>'; return; }
-  CAT_ORDER.filter(c => byCat.has(c)).forEach(cat => {
-    const items = byCat.get(cat).sort((a, b) => a.label.localeCompare(b.label, undefined, {numeric:true}));
-    const g = document.createElement('div'); g.className = 'grp' + (items.length > 8 ? ' collapsed' : '');
-    const head = document.createElement('div'); head.className = 'ghead';
-    const tog = document.createElement('button'); tog.className = 'gtoggle'; tog.setAttribute('aria-expanded', items.length > 8 ? 'false' : 'true');
-    tog.innerHTML = `<span class="dot" style="background:${items[0].color}"></span><span class="gname"></span><span class="gcount">${items.length}</span>${CHEVRON}`;
-    tog.querySelector('.gname').textContent = cat;
-    tog.onclick = () => { const c = g.classList.toggle('collapsed'); tog.setAttribute('aria-expanded', c ? 'false' : 'true'); };
-    const eye = document.createElement('button'); eye.className = 'eye'; eye.innerHTML = EYE;
-    eye.title = `Show or hide all ${cat.toLowerCase()}`; eye.setAttribute('aria-label', eye.title);
-    eye.onclick = () => {
-      const anyOn = items.some(it => !parts.get(it.label).row.classList.contains('off'));
-      items.forEach(it => setVisible(it.label, !anyOn)); syncGroups();
-    };
-    head.append(tog, eye);
-    const ul = document.createElement('div'); ul.className = 'glist';
+  CAT_ORDER.filter(c => byCat.has(c)).forEach(catName => {
+    const items = byCat.get(catName).sort((a, b) => a.label.localeCompare(b.label, undefined, {numeric:true}));
+    const cat = document.createElement('div'); cat.className = 'cat';
+    const row = document.createElement('div'); row.className = 'catrow';
+    row.innerHTML = `<input type="checkbox" checked aria-label="Show ${esc(catName.toLowerCase())}"><span class="sw" style="background:${items[0].color}"></span>`
+      + `<button class="catname">${esc(catName)}</button><span class="cnt">${items.length}</span>`
+      + `<button class="exp" aria-expanded="false" aria-label="Show ${esc(catName.toLowerCase())} structures">${CHEVRON}</button>`;
+    const box = row.querySelector('input');
+    box.onchange = () => { items.forEach(it => setVisible(it.label, box.checked)); box.indeterminate = false; };
+    const toggleOpen = () => { const o = cat.classList.toggle('open'); row.querySelector('.exp').setAttribute('aria-expanded', o); };
+    row.querySelector('.catname').onclick = toggleOpen; row.querySelector('.exp').onclick = toggleOpen;
+    const ul = document.createElement('div'); ul.className = 'items';
     items.forEach(it => {
-      const row = document.createElement('div'); row.className = 'srow'; row.tabIndex = 0;
-      row.setAttribute('role', 'button'); row.setAttribute('aria-pressed', 'true');
-      row.innerHTML = `<span class="dot" style="background:${it.color}"></span><span class="sname"></span><span class="vol"></span>`;
-      row.querySelector('.sname').textContent = pretty(it.label);
-      row.querySelector('.sname').title = it.label;
-      if (it.vol != null) row.querySelector('.vol').textContent = fmtVol(it.vol);
-      const toggle = () => { setVisible(it.label, row.classList.contains('off')); syncGroups(); };
-      row.onclick = toggle;
-      row.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); } };
-      row.onmouseenter = () => { const p = parts.get(it.label); if (p && p.mat) p.mat.emissive.setHex(0x4a2200); };
-      row.onmouseleave = () => { const p = parts.get(it.label); if (p && p.mat) p.mat.emissive.setHex(0x000000); };
-      parts.set(it.label, {mesh:null, mat:null, color:it.color, cat, row});
-      ul.appendChild(row);
+      const r = document.createElement('label'); r.className = 'srow';
+      r.innerHTML = `<input type="checkbox" checked><span class="sw" style="background:${it.color}"></span>`
+        + `<span class="nm" title="${esc(it.label)}">${esc(pretty(it.label))}</span><span class="vol">${it.vol != null ? fmtVol(it.vol) : ''}</span>`;
+      const b = r.querySelector('input');
+      b.onchange = () => { setVisible(it.label, b.checked); syncCat(cat); };
+      r.onmouseenter = () => { const p = parts.get(it.label); if (p && p.mat) p.mat.emissive.setHex(0x4a2200); };
+      r.onmouseleave = () => { const p = parts.get(it.label); if (p && p.mat) p.mat.emissive.setHex(0x000000); };
+      parts.set(it.label, {mesh:null, mat:null, cat:catName, color:it.color, row:r, box:b, visible:true, check:null});
+      ul.appendChild(r);
     });
-    g.append(head, ul); list.appendChild(g);
+    cat.append(row, ul); list.appendChild(cat);
   });
 }
-$('showAll').onclick = () => { for (const k of parts.keys()) setVisible(k, true); syncGroups(); };
-$('hideAll').onclick = () => { for (const k of parts.keys()) setVisible(k, false); syncGroups(); };
 $('structSearch').oninput = e => {
-  const q = e.target.value.trim().toLowerCase();
-  document.querySelectorAll('.grp').forEach(g => {
+  const q = e.target.value.trim().toLowerCase().replace(/ /g, '_');
+  document.querySelectorAll('.cat').forEach(cat => {
     let any = false;
-    g.querySelectorAll('.srow').forEach(r => {
-      const hit = !q || r.querySelector('.sname').title.toLowerCase().includes(q.replace(/ /g, '_'));
+    cat.querySelectorAll('.srow').forEach(r => {
+      const hit = !q || r.querySelector('.nm').title.toLowerCase().includes(q);
       r.style.display = hit ? '' : 'none'; any = any || hit;
     });
-    g.style.display = any ? '' : 'none';
-    if (q && any) g.classList.remove('collapsed');
+    cat.style.display = any ? '' : 'none';
+    if (q && any) cat.classList.add('open');
   });
 };
 
-// ---------- inspector: scan details + strip ----------
-function buildScan(ds){
-  const kv = $('scanKv'); kv.innerHTML = '';
-  const rows = scanRows(ds.report, ds.meshes.length);
-  rows.forEach(([k, v]) => {
-    const dt = document.createElement('dt'); dt.textContent = k;
-    const dd = document.createElement('dd'); dd.textContent = v;
-    kv.append(dt, dd);
-  });
-  $('scanEmpty').style.display = rows.length ? 'none' : 'block';
-  $('rawWrap').style.display = ds.report ? 'block' : 'none';
-  $('rawReport').textContent = ds.report ? JSON.stringify(ds.report, null, 2) : '';
+// ---------- left: dataset card ----------
+function buildDatasetCard(ds){
+  const r = ds.report || {};
+  const mod = {CT:'CT', MR:'MRI', PT:'PET'}[r.modality] || r.modality;
+  const meta = [];
+  if (mod) meta.push(mod);
+  if (r.num_slices) meta.push(`${r.num_slices} slices`);
+  if (Array.isArray(r.voxel_spacing_mm)) meta.push(r.voxel_spacing_mm.map(v => +(+v).toFixed(2)).join(' × ') + ' mm');
+  if (r.engine) meta.push(r.engine + (r.fast_mode ? ' · 3 mm' : ''));
+  $('dsMeta').innerHTML = meta.map(m => `<span>${esc(m)}</span>`).join('');
+  const ok = ds.meshes.length > 0;
+  $('dsOk').style.display = 'flex'; $('dsOk').classList.toggle('warn', !ok);
+  $('dsOkText').textContent = ok ? `${ds.meshes.length} structure${ds.meshes.length === 1 ? '' : 's'} reconstructed` : 'No 3D meshes in this scan';
 }
-function buildStrip(ds){
+
+// ---------- right: metrics vs reference ----------
+function buildMetrics(ds){
+  const v = ds.validation, el = $('metrics');
+  if (!v || !v.metrics){
+    el.innerHTML = '<p class="muted">No reference comparison for this scan.</p>'
+      + '<p class="note" style="margin-top:6px">Run validate.py against a reference segmentation to add one.</p>';
+    return;
+  }
+  const names = Object.keys(v.metrics);
+  const row = (lbl, f) => `<tr><td>${lbl}</td>${names.map(n => `<td>${f(v.metrics[n])}</td>`).join('')}</tr>`;
+  const num = (x, d) => x == null ? '—' : (+x).toFixed(d);
+  el.innerHTML = `<p class="note" style="margin-bottom:10px">${esc(pretty(v.candidate || 'candidate'))} against ${esc(v.reference || 'reference')} on this scan. `
+    + 'The reference is an algorithm, not expert ground truth.</p>'
+    + `<table class="mtable"><tr><th>Metric</th>${names.map(n => `<th>${esc(pretty(n))}</th>`).join('')}</tr>`
+    + row('ASSD', m => `${num(m.assd_mm, 2)} mm`)
+    + row('HD95', m => `${num(m.hd95_mm, 1)} mm`)
+    + row('IoU', m => num(m.iou, 3))
+    + row('Dice', m => num(m.dice, 3))
+    + row('Volume error', m => m.pred_cm3 != null && m.gt_cm3 ? `${((m.pred_cm3 - m.gt_cm3) / m.gt_cm3 * 100).toFixed(1)} %` : '—')
+    + '</table>';
+}
+
+// ---------- centre: thumbnails ----------
+function buildThumbs(ds){
   const t = $('thumbs'); t.innerHTML = '';
+  $('tabImg').disabled = !ds.images.length;
   if (!ds.images.length){ t.innerHTML = '<span class="none">No slices or renders for this scan.</span>'; return; }
   ds.images.forEach(img => {
-    const i = document.createElement('img');
-    i.src = `/output/${encodeURIComponent(ds.name)}/${img}`; i.loading = 'lazy'; i.title = img; i.alt = img;
-    i.onclick = () => { $('lbimg').src = i.src; $('lightbox').style.display = 'flex'; };
-    t.appendChild(i);
+    const src = `/output/${encodeURIComponent(ds.name)}/${img}`;
+    const b = document.createElement('button'); b.className = 'thumb';
+    b.innerHTML = `<div class="tt">${esc(pretty(img.replace(/\.png$/i, '')))}</div><img src="${src}" alt="" loading="lazy">`;
+    b.onclick = () => {
+      $('imgviewImg').src = src; $('imgviewImg').alt = img;
+      document.querySelectorAll('.thumb').forEach(x => x.setAttribute('aria-current', x === b ? 'true' : 'false'));
+      showView('images');
+    };
+    b.ondblclick = () => { $('lbimg').src = src; $('lightbox').style.display = 'flex'; };
+    t.appendChild(b);
   });
 }
 
@@ -611,115 +811,139 @@ function selectDataset(name){
   const stage = $('stage');
   if (!ds){ stage.classList.add('is-empty'); return; }
   stage.classList.remove('is-empty');
-  $('dsSelect').value = ds.name;
+  $('dsSelect').value = ds.name; $('dsSelect').dataset.current = ds.name;
   history.replaceState(null, '', '#' + encodeURIComponent(ds.name));
   const r = ds.report || {};
-  const mod = {CT:'CT', MR:'MRI', PT:'PET'}[r.modality] || r.modality;
-  const meta = [mod, `${ds.meshes.length} structure${ds.meshes.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
-  $('dsmeta').textContent = meta; $('dsmeta').style.display = 'inline-flex';
   $('stageTitle').textContent = ds.name;
   $('stageSub').textContent = r.engine ? `${r.engine}${r.fast_mode ? ' · fast' : ''}` : '';
+  showView('3d');
   loadToken++;              // drop any meshes still arriving for the previous scan
-  clearModel(); buildStructures(ds); buildScan(ds); buildStrip(ds); loadModel(ds);
+  clearModel();
+  buildDatasetCard(ds); buildStructures(ds); buildMetrics(ds); buildThumbs(ds);
+  $('checks').innerHTML = '<p class="muted">Runs once the model loads.</p>'; $('checkState').textContent = '';
+  loadModel(ds);
 }
 async function loadDatasets(prefer){
   const sel = $('dsSelect');
-  try{
-    DATASETS = (await (await fetch('/api/datasets')).json()).datasets;
-  }catch(e){ DATASETS = []; }
+  try{ DATASETS = (await (await fetch('/api/datasets')).json()).datasets; }catch(e){ DATASETS = []; }
+  $('dsCount').textContent = DATASETS.length ? `${DATASETS.length} available` : '';
   sel.innerHTML = '';
   if (!DATASETS.length){
     sel.innerHTML = '<option>No scans yet</option>'; sel.disabled = true;
-    $('dsmeta').style.display = 'none'; $('stage').classList.add('is-empty');
+    $('stage').classList.add('is-empty');
     $('structList').innerHTML = '<p class="muted">Upload a scan to see its structures.</p>';
     return;
   }
   sel.disabled = false;
   DATASETS.forEach(d => { const o = document.createElement('option'); o.value = o.textContent = d.name; sel.appendChild(o); });
   const fromHash = decodeURIComponent(location.hash.slice(1));
-  const pick = [prefer, fromHash, $('dsSelect').dataset.current].find(n => n && DATASETS.some(d => d.name === n))
+  const pick = [prefer, fromHash, sel.dataset.current].find(n => n && DATASETS.some(d => d.name === n))
     || (DATASETS.find(d => d.meshes.length) || DATASETS[0]).name;
-  if (pick !== sel.dataset.current || prefer){ sel.dataset.current = pick; selectDataset(pick); }
-  else sel.value = pick;
+  if (pick !== sel.dataset.current || prefer) selectDataset(pick); else sel.value = pick;
 }
-$('dsSelect').onchange = e => { e.target.dataset.current = e.target.value; selectDataset(e.target.value); };
+$('dsSelect').onchange = e => selectDataset(e.target.value);
 
-// ---------- device + per-step time estimates ----------
-// [label, cpu_seconds, gpu_seconds]  (gpu only helps deep-learning steps)
+// ---------- status card ----------
+let JOB_ACTIVE = false, DEVICE = 'cpu', DEVICE_LABEL = 'CPU';
+function setStatus(state, k, v){
+  $('status').dataset.status = state; $('statusK').textContent = k; $('statusV').textContent = v || '';
+}
+function idleStatus(){
+  if (!JOB_ACTIVE) setStatus(DEVICE === 'cuda' ? 'ready' : 'cpu', 'Ready', DEVICE_LABEL);
+}
+
+// ---------- device + time estimates ----------
+// [label, cpu_seconds, gpu_seconds]; null = not measured on that device.
+// MR rows were measured on this machine (RTX 5080, 6-core CPU, October 2026)
+// on one 192-slice 1 mm brain MRI; per-scan times grow with volume size.
+// CT and PET classical rows have not been timed yet and remain estimates.
 const STEPS = {
-  MR: [['Load + N4 bias correction',45,45],['NLM denoise',60,60],
-       ['BET skull strip',60,60],['MedSAM refine',600,25],
-       ['Tissue classification (GMM)',20,20],['3D reconstruction',35,35]],
+  MR: [['Preprocessing (N4 bias + NLM denoise)',75,75],['Skull strip (BET)',9,9],
+       ['MedSAM refine',433,25],['Tissue classification (GMM)',9,9],
+       ['3D reconstruction',15,14]],
   CT: [['Load + HU conversion',10,10],['Body / lungs / bone / soft tissue',40,40],
        ['3D mesh reconstruction',40,40]],
   PT: [['Load + normalize',8,8],['Hotspot (TBR)',15,15],
        ['MIP + 3D reconstruction',30,30]],
 };
-let DEVICE = 'cpu';
-const fmt = s => s >= 60 ? `~${Math.round(s/60)} min` : `~${s}s`;
-
-async function initDevice(){
-  try{
-    const d = await (await fetch('/api/device')).json();
-    DEVICE = d.device;
-    const gpu = d.device === 'cuda', state = gpu ? 'gpu' : 'cpu';
-    const label = gpu ? 'GPU · ' + d.name.replace(/^NVIDIA (GeForce )?/, '') : 'CPU';
-    $('devbadge').textContent = label; $('devbadge').dataset.state = state;
-    $('devdot').dataset.state = state; $('devdot').title = 'Device: ' + d.name;
-  }catch(e){}
-  renderEstimate();
+const MEASURED = {MR:true};
+const MEDSAM = ['MedSAM refine',433,25];
+// The app always runs TotalSegmentator in fast (3 mm) mode. MR: same study,
+// warm GPU run (the first GPU run after a restart took 45 s, not 30 s).
+// CT: one end-to-end CPU run on a 64-slice chest CT (79 structures).
+const TS_STEPS = {
+  MR: [['DICOM → NIfTI',9,9],['TotalSegmentator (nnU-Net, fast)',24,30],['Mesh structures',1,1]],
+  CT: [['Convert, segment and mesh 79 structures',83,null]],
+};
+// Seconds below 90 s, so measured values like 75 s or 83 s aren't rounded to "~1 min".
+const fmt = s => s >= 90 ? `~${Math.round(s/60)} min` : `~${s}s`;
+const cell = s => s == null ? '<span style="color:var(--muted)">not measured</span>'
+                : s === 0 ? '<span style="color:var(--muted)">skipped</span>' : fmt(s);
+function estimateTable(rows, gi){
+  const known = rows.every(r => r[gi] != null);
+  const tot = rows.reduce((a, r) => a + (r[gi] || 0), 0);
+  let html = '<table>';
+  rows.forEach(r => { html += `<tr><td>${r[0]}</td><td class="t">${cell(r[gi])}</td></tr>`; });
+  html += `<tr class="tot"><td>Total</td><td class="t">${known ? fmt(tot) : cell(null)}</td></tr></table>`;
+  return {html, total: known ? fmt(tot) : 'not measured'};
 }
 function renderEstimate(){
-  // TotalSegmentator engine has its own estimate (modality-independent)
-  if ($('engine').value === 'totalseg'){
-    const cpu = DEVICE !== 'cuda';
-    const rows = [['Load + DICOM→NIfTI',5,5], ['TotalSegmentator (nnU-Net)',cpu?90:30,30], ['Mesh 100+ structures',45,45]];
-    const gi = cpu ? 1 : 2; let tot = 0;
-    let html = '<div class="est"><h4>Estimated time — TotalSegmentator on '+(cpu?'CPU':'GPU')+'</h4><table>';
-    rows.forEach(r => { tot += r[gi]; html += `<tr><td>${r[0]}</td><td class="t">${fmt(r[gi])}</td></tr>`; });
-    html += `<tr class="tot"><td>Total</td><td class="t">${fmt(tot)}</td></tr></table>`;
-    html += '<div class="note">Segments 100+ individually-labeled organs/bones (CT &amp; MR). First run downloads model weights (~135 MB).</div></div>';
-    $('estimate').innerHTML = html; return;
-  }
-  const mod = $('modality').value || 'MR';
+  const gpu = DEVICE === 'cuda', gi = gpu ? 2 : 1, dev = gpu ? 'GPU' : 'CPU';
+  const mod = $('modality').value;
   const key = {'':'MR','MR':'MR','CT':'CT','PT':'PT'}[mod] || 'MR';
-  const rows = STEPS[key], gi = DEVICE === 'cuda' ? 2 : 1;
-  let tot = 0, html = '<div class="est"><h4>Estimated time — '+key+' on '+(DEVICE==='cuda'?'GPU':'CPU')+'</h4><table>';
-  rows.forEach(r => { tot += r[gi]; html += `<tr><td>${r[0]}</td><td class="t">${fmt(r[gi])}</td></tr>`; });
-  html += `<tr class="tot"><td>Total</td><td class="t">${fmt(tot)}</td></tr></table>`;
-  if (DEVICE !== 'cuda' && key === 'MR')
-    html += '<div class="note warn">No GPU detected. MedSAM dominates on CPU — choose “Fast (skip MedSAM)” to finish in ~3 min, or run on a CUDA machine for ~'+fmt(STEPS.MR.reduce((a,r)=>a+r[2],0))+'.</div>';
-  html += '<div class="note">Estimates are approximate; the live log shows real per-step timing.</div></div>';
-  $('estimate').innerHTML = html;
+  const autoNote = mod === '' ? '<div class="note">Modality is auto-detected; showing the MRI figures.</div>' : '';
+  let est, notes = '';
+  if ($('engine').value === 'totalseg'){
+    const tkey = key === 'CT' ? 'CT' : 'MR';   // PET runs through the MR model
+    est = estimateTable(TS_STEPS[tkey], gi);
+    if (tkey === 'MR' && gpu) notes += '<div class="note">Fast mode is no quicker on the GPU than the CPU (24 s): CUDA start-up outweighs the small model.</div>';
+    if (tkey === 'CT' && gpu) notes += '<div class="note">Not yet timed on the GPU. On the CPU this took ~83 s for a 64-slice chest CT.</div>';
+    notes += '<div class="note">Measured on one scan on this machine; larger scans take longer.</div>';
+  } else {
+    const rows = STEPS[key];
+    est = estimateTable(rows, gi);
+    const ms = rows.find(r => r[0].startsWith('MedSAM'));
+    if (!gpu && ms && ms[1] > 0){
+      const without = rows.reduce((a, r) => a + (r === ms ? 0 : r[1]), 0);
+      const onGpu = rows.reduce((a, r) => a + r[2], 0);
+      notes += `<div class="note warn">No GPU detected. MedSAM is most of the CPU time: skip it to finish in ${fmt(without)}, or run on a CUDA machine for ${fmt(onGpu)}.</div>`;
+    }
+    notes += `<div class="note">${MEASURED[key] ? 'Measured on one 192-slice MRI on this machine; larger scans take longer.' : 'Not yet timed on this machine; treat as a rough guide.'}</div>`;
+  }
+  $('estimate').innerHTML = est.html + notes + autoNote;
+  $('estSummary').textContent = `${est.total} on ${dev}`;
 }
 $('modality').addEventListener('change', renderEstimate);
 $('engine').addEventListener('change', renderEstimate);
 $('fast').addEventListener('change', () => {
-  STEPS.MR[3] = $('fast').checked ? ['MedSAM refine (skipped)',0,0] : ['MedSAM refine',600,25];
+  // Look MedSAM up by name: the rows follow the pipeline's measured stages.
+  const i = STEPS.MR.findIndex(r => r[0].startsWith('MedSAM'));
+  STEPS.MR[i] = $('fast').checked ? ['MedSAM refine (skipped)',0,0] : MEDSAM.slice();
   renderEstimate();
 });
+async function initDevice(){
+  try{
+    const d = await (await fetch('/api/device')).json();
+    DEVICE = d.device;
+    DEVICE_LABEL = d.device === 'cuda' ? 'GPU · ' + d.name.replace(/^NVIDIA (GeForce )?/, '') : 'CPU only';
+  }catch(e){ DEVICE_LABEL = 'device unknown'; }
+  idleStatus(); renderEstimate();
+}
 
-// ---------- upload drawer ----------
-function openDrawer(){ $('drawer').classList.add('open'); $('scrim').classList.add('open'); $('drawer').setAttribute('aria-hidden','false'); }
-function closeDrawer(){ $('drawer').classList.remove('open'); $('scrim').classList.remove('open'); $('drawer').setAttribute('aria-hidden','true'); }
-['newScan','railUpload','emptyUpload','jobpill'].forEach(id => $(id).addEventListener('click', openDrawer));
-$('closeDrawer').onclick = closeDrawer; $('scrim').onclick = closeDrawer;
-document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeDrawer(); $('lightbox').style.display = 'none'; } });
-
+// ---------- pipeline: upload + job ----------
 const drop = $('drop'), fileIn = $('file'), goBtn = $('go'); let chosen = null;
 drop.onclick = () => fileIn.click();
+drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fileIn.click(); } };
 ['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('hover'); }));
 ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('hover'); }));
 drop.addEventListener('drop', ev => { if (ev.dataTransfer.files[0]) setFile(ev.dataTransfer.files[0]); });
 fileIn.onchange = () => { if (fileIn.files[0]) setFile(fileIn.files[0]); };
-function setFile(f){ chosen = f; drop.querySelector('strong').textContent = f.name; goBtn.disabled = false; }
+function setFile(f){ chosen = f; $('dropName').textContent = f.name; goBtn.disabled = false; }
 
-function setStatus(status, text){
+function setJob(status, text){
+  $('job').classList.add('show');
   $('jobmsg').dataset.status = status; $('jobmsgtext').textContent = text;
-  const pill = $('jobpill'); pill.dataset.status = status; pill.classList.add('show');
-  $('jobpilltext').textContent = text;
 }
-
 goBtn.onclick = async () => {
   if (!chosen) return;
   goBtn.disabled = true;
@@ -729,57 +953,58 @@ goBtn.onclick = async () => {
   fd.append('modality', $('modality').value);
   fd.append('no_medsam', $('fast').checked ? '1' : '');
   fd.append('engine', $('engine').value);
-  $('job').style.display = 'block';
-  setStatus('running', 'Uploading…');
+  JOB_ACTIVE = true;
+  setJob('running', 'Uploading…'); setStatus('running', 'Uploading', chosen.name);
   try{
     const r = await fetch('/api/upload', {method:'POST', body:fd});
     if (!r.ok){ throw new Error((await r.json()).detail || 'upload failed'); }
     const {job_id, name} = await r.json();
     poll(job_id, name);
-  }catch(e){ setStatus('error', 'Upload failed: ' + e.message); goBtn.disabled = false; }
+  }catch(e){
+    JOB_ACTIVE = false;
+    setJob('error', 'Upload failed: ' + e.message); setStatus('error', 'Upload failed', e.message);
+    goBtn.disabled = false;
+  }
 };
-
 function poll(id, name){
-  const log = $('joblog'), fill = $('barfill'), stepEl = $('jobstep');
   const t0 = Date.now();
   const iv = setInterval(async () => {
     let j;
     try{ const r = await fetch('/api/jobs/' + id); if (!r.ok) throw 0; j = await r.json(); }
-    catch(e){ stepEl.textContent = '(lost connection to server — is it still running?)'; return; }
-    setStatus(j.status === 'queued' ? 'queued' : j.status, j.message);
-    log.textContent = (j.log || []).join('\n'); log.scrollTop = log.scrollHeight;
+    catch(e){ $('jobstep').textContent = '(lost connection to server — is it still running?)'; return; }
+    setJob(j.status === 'queued' ? 'queued' : j.status, j.message);
+    $('joblog').textContent = (j.log || []).join('\n'); $('joblog').scrollTop = $('joblog').scrollHeight;
     // Honest progress: parse the "[x/N]" step header from the live log
     let pct = 5;
     const m = (j.message || '').match(/\[(\d+)\/(\d+)\]/);
     if (m) pct = Math.round((+m[1] - 0.5) / (+m[2]) * 100);
     const elapsed = Math.round((Date.now() - t0) / 1000);
-    stepEl.textContent = `elapsed ${Math.floor(elapsed/60)}m ${elapsed%60}s`;
+    $('jobstep').textContent = `elapsed ${Math.floor(elapsed/60)}m ${elapsed%60}s`;
     if (j.status === 'done') pct = 100;
-    if (j.status === 'error') stepEl.textContent += ' — see log';
-    fill.style.width = pct + '%';
+    $('barfill').style.width = pct + '%';
+    if (j.status === 'running' || j.status === 'queued') setStatus('running', 'Processing', `${name} · ${m ? m[0] : 'starting'}`);
     if (j.status === 'done' || j.status === 'error'){
-      clearInterval(iv);
-      goBtn.disabled = false;
+      clearInterval(iv); JOB_ACTIVE = false; goBtn.disabled = false;
       if (j.status === 'done'){
-        setStatus('done', 'Done in ' + stepEl.textContent.replace('elapsed ', ''));
+        const took = $('jobstep').textContent.replace('elapsed ', '');
+        setJob('done', 'Done in ' + took); setStatus('done', 'Processing complete', name);
         loadDatasets(name);
+      } else {
+        $('jobstep').textContent += ' — see log'; setStatus('error', 'Processing failed', name);
       }
     }
   }, 1500);
-  // also refresh the dataset list periodically so finished scans appear even if poll hiccups
   const refresh = setInterval(() => loadDatasets(), 20000);
   setTimeout(() => clearInterval(refresh), 30 * 60 * 1000);
 }
 
 $('lightbox').onclick = function(){ this.style.display = 'none'; };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').style.display = 'none'; });
 
 async function initCapabilities(){
   try{
     const c = await (await fetch('/api/capabilities')).json();
-    if (!c.totalseg){
-      $('engineTotalseg').disabled = true;
-      $('engineNote').style.display = 'block';
-    }
+    if (!c.totalseg){ $('engineTotalseg').disabled = true; $('engineNote').style.display = 'block'; }
   }catch(e){ /* capabilities check is best-effort; engine stays enabled */ }
 }
 

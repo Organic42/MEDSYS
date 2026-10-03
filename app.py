@@ -183,8 +183,17 @@ def list_datasets():
                 continue
             pngs, meshes, report = _list_assets(d)
             if pngs or meshes:
+                # validate.py output, when a reference comparison was run
+                validation = None
+                vp = os.path.join(d, 'validation', 'validation_report.json')
+                if os.path.exists(vp):
+                    try:
+                        with open(vp) as fh:
+                            validation = json.load(fh)
+                    except Exception:
+                        pass
                 out.append({'name': name, 'images': pngs, 'meshes': meshes,
-                            'report': report})
+                            'report': report, 'validation': validation})
     return {'datasets': out}
 
 
