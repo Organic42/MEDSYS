@@ -102,6 +102,60 @@ def point_to_mesh_distance(points, verts, faces, approx_samples=400_000, rng=Non
     return np.linalg.norm(points - closest, axis=1), True
 
 
+def signed_volume(verts, faces):
+    """Signed enclosed volume: positive when face normals point outward."""
+    a, b, c = _corners(verts, faces)
+    return float(np.einsum('ij,ij->i', a, np.cross(b, c)).sum() / 6.0)
+
+
+def signed_distance_to_mesh(points, verts, faces):
+    """Signed distance from points to a closed mesh: negative inside.
+
+    Uses VTK's implicit distance, whose sign follows the face winding; the
+    sign is normalised with the mesh's signed volume so an inward-facing
+    mesh cannot silently invert shrinkage and expansion. Requires PyVista.
+    """
+    import pyvista as pv
+    fa = np.hstack([np.full((len(faces), 1), 3), faces]).ravel()
+    ref = pv.PolyData(np.asarray(verts, dtype=float), fa)
+    probe = pv.PolyData(np.asarray(points, dtype=float))
+    d = np.asarray(probe.compute_implicit_distance(ref)['implicit_distance'], dtype=float)
+    return d if signed_volume(verts, faces) >= 0 else -d
+
+
+def compare_meshes(test_verts, test_faces, ref_verts, ref_faces, rng,
+                   n_samples=20_000, tol_mm=1.0):
+    """Tier 2 metrics for a test mesh against a reference mesh.
+
+    Same definitions as compare_to_phantom, with the reference surface in
+    place of the analytic one: distances in both directions are exact
+    point-to-triangle distances (VTK). mean_signed_mm > 0 means the test
+    mesh lies outside the reference on average (expansion).
+    """
+    test_pts = sample_mesh_surface(test_verts, test_faces, n_samples, rng)
+    ref_pts = sample_mesh_surface(ref_verts, ref_faces, n_samples, rng)
+    d_test, exact_a = point_to_mesh_distance(test_pts, ref_verts, ref_faces, rng=rng)
+    d_ref, exact_b = point_to_mesh_distance(ref_pts, test_verts, test_faces, rng=rng)
+    both = np.concatenate([d_test, d_ref])
+    signed = signed_distance_to_mesh(test_pts, ref_verts, ref_faces)
+    topo = mesh_topology(test_faces)
+    ref_vol, ref_area = mesh_volume(ref_verts, ref_faces), mesh_area(ref_verts, ref_faces)
+    vol, area = mesh_volume(test_verts, test_faces), mesh_area(test_verts, test_faces)
+    return {
+        'assd_mm': float(both.mean()),
+        'hd95_mm': float(max(np.percentile(d_test, 95), np.percentile(d_ref, 95))),
+        'hausdorff_mm': float(max(d_test.max(), d_ref.max())),
+        'nsd': float((both <= tol_mm).mean()),
+        'mean_signed_mm': float(signed.mean()),
+        'volume_err_pct': float((vol - ref_vol) / ref_vol * 100) if ref_vol else float('nan'),
+        'area_err_pct': float((area - ref_area) / ref_area * 100) if ref_area else float('nan'),
+        'ref_volume_cm3': ref_vol / 1000.0,
+        'topology_ok': bool(topo['closed'] and topo['nonmanifold_edges'] == 0),
+        'distance_exact': bool(exact_a and exact_b),
+        **topo,
+    }
+
+
 def compare_to_phantom(verts, faces, phantom, placement, truth_points, rng,
                        n_mesh_samples=20_000, tol_mm=1.0):
     """All Tier 1 metrics for one mesh against the exact phantom surface."""

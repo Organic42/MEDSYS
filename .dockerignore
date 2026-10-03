@@ -27,3 +27,6 @@ dicom_data/
 regen_mesh.py
 run_totalseg.py
 _body.json
+
+# research datasets
+data/

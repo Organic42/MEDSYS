@@ -42,3 +42,6 @@ dist/
 *.zip
 ct_test.zip
 mri_test.zip
+
+# Research datasets (public, but large and licence-bound: never commit or bake into images)
+data/
