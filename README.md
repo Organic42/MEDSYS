@@ -14,370 +14,359 @@ license: mit
 
 # MEDSYS
 
-**DICOM-to-3D medical imaging platform**
+**Risk-aware reconstruction of 3D anatomy from medical scans**
 
-Modality-aware segmentation · AI-assisted organ mapping · Interactive 3D visualization · Neuroplasticity Explorer
+A research project and an open platform: it turns DICOM studies into per-structure 3D meshes,
+and measures how far those meshes can be trusted.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](#requirements)
 [![CI](https://github.com/Organic42/MEDSYS/actions/workflows/python-app.yml/badge.svg)](https://github.com/Organic42/MEDSYS/actions/workflows/python-app.yml)
-[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](Dockerfile)
+[![Status: research prototype](https://img.shields.io/badge/status-research%20prototype-orange.svg)](#status)
 
-[Overview](#overview) · [Features](#features) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Deployment](#deployment) · [Accuracy](#accuracy--validation) · [Contributing](#contributing)
+[Research question](#research-question) · [Findings so far](#findings-so-far) · [Methods](#methods) · [Reproduce](#reproducing-the-results) · [Platform](#the-platform) · [Roadmap](#roadmap) · [Cite](#citation)
 
 </div>
 
 ---
 
-## Overview
+> **Not a medical device.** MEDSYS is for research and education. It is not cleared or certified
+> for clinical use and must not inform diagnosis or treatment. See [Disclaimer](#disclaimer).
 
-MEDSYS turns raw clinical imaging (DICOM) into browser-explorable 3D anatomy. Upload a scan,
-and it auto-detects the modality, runs the appropriate segmentation pipeline, and renders the
-result as rotatable, per-structure 3D meshes alongside the source imagery — no desktop imaging
-software, no manual conversion steps.
+## Summary
 
-It ships two segmentation engines, three imaging modalities, a production-grade web service,
-a free-tier hosting path, a standalone desktop build, and a quantitative accuracy-validation
-suite — built as a complete, deployable system rather than a research script.
+Automated pipelines can turn a CT or MRI scan into a 3D model in minutes, but they do not say how
+far that model's surface may be from the real anatomy. Error enters at every stage (segmentation,
+voxel size, blurring, surface extraction, smoothing, simplification), and the stages interact.
 
-> **Not a medical device.** MEDSYS is an educational and research tool. It is not FDA-cleared,
-> not CE-marked, and must not be used for diagnosis, treatment planning, or any clinical
-> decision. See [Disclaimer](#disclaimer).
+**Thesis.** This project develops a risk-aware framework for automated DICOM-to-3D anatomical
+reconstruction that quantifies stage-wise geometric error, predicts final-mesh reliability without
+ground truth, and selects reconstruction pipelines subject to task-specific accuracy and
+computational constraints. In short: **measure → predict → decide**.
 
----
+MEDSYS, the platform in this repository, is both the system under study and the instrument used
+to study it. Production and research run the same reconstruction code
+([`reconstruction.py`](reconstruction.py)), so a result measured here describes the meshes the
+app actually ships.
 
-## Features
+## Research question
 
-| Capability | Detail |
-|---|---|
-| **Modality-aware routing** | Auto-detects CT, MRI (T1/T2), or PET from DICOM metadata and dispatches to the matching pipeline |
-| **Dual segmentation engines** | Fast heuristic engine (HU thresholding, BET, GMM) for instant results; TotalSegmentator (nnU-Net) for 100+ individually-labeled anatomical structures |
-| **CT pipeline** | HU conversion → windowing → lung / skeleton / body / soft-tissue segmentation → colored 3D meshes |
-| **MRI brain pipeline** | N4 bias correction → NLM denoising → BET skull stripping → MedSAM refinement → GM/WM/CSF tissue classification → hybrid 3D surface |
-| **PET pipeline** | Activity normalization → cerebral uptake mapping → tumor hotspot via tumor-to-background ratio → MIP views |
-| **Web application** | Drag-and-drop upload, live job log, per-dataset gallery, interactive three.js 3D viewer with per-structure show/hide |
-| **Neuroplasticity Explorer** | Natural-language questions ("what does chronic stress do to my brain?") mapped onto an anatomically-sculpted 3D brain, backed by a curated evidence base with a Claude fallback for open-ended queries |
-| **Accuracy validation** | Dice, IoU, Hausdorff-95, and Average Surface Distance metrics, computed against a reference engine on identical voxel geometry |
-| **Production hardening** | SQLite-backed job persistence, bounded/queued job dispatch (Redis + RQ optional), health/readiness endpoints, containerized deployment |
-| **Multiple distribution paths** | Docker Compose (full stack), free-tier hosting (Hugging Face Spaces), standalone Windows `.exe` (no Python required) |
+| | Question | Role | Status |
+|---|---|---|---|
+| **RQ1 — Measure** | Which pipeline stages, and which interactions between them, contribute most to final anatomical geometric error? | Core thesis | Tier 1 (phantoms) done; Tier 2 (anatomy) next |
+| **RQ2 — Predict** | Can final-mesh error and task suitability be predicted without ground truth at inference time, with empirically calibrated coverage? | Major extension | Planned |
+| **RQ3 — Decide** | Can those predictions select the lowest-cost pipeline that satisfies a predefined task-specific reliability constraint? | Applied extension | Planned |
 
----
+Each question builds on the one before it. RQ2 is only distinct from existing segmentation quality
+control if RQ1 shows that reconstruction stages or topology matter. The full proposal, with its
+literature basis, is in [`docs/gap-analysis-two-pager.tex`](docs/gap-analysis-two-pager.tex)
+(plain text: [`.txt`](docs/gap-analysis-two-pager.txt)); the evidence log behind it is
+[`docs/literature-gap-analysis.md`](docs/literature-gap-analysis.md).
 
-## Architecture
+## Findings so far
 
-```
-                         ┌─────────────────────────┐
-   Browser  ── upload ──▶│   FastAPI (app.py)      │
-   (drag & drop)         │   /api/upload            │
-                         │   /api/jobs/{id}          │
-                         │   /api/datasets           │
-                         └──────────┬───────────────┘
-                                    │ enqueue
-                    ┌───────────────┴────────────────┐
-                    │                                 │
-            in-process pool                    Redis + RQ (prod)
-            (default, single host)             (scale-out workers)
-                    │                                 │
-                    └───────────────┬────────────────┘
-                                    ▼
-                    segmentation_pipeline.py (subprocess)
-                    ├─ modality detection
-                    ├─ heuristic engine  ──┐
-                    └─ TotalSegmentator  ──┴─▶ per-structure 3D meshes + report.json
-                                    │
-                                    ▼
-                    SQLite job store  ◀──status──  shared output/ + uploads/ volume
-                                    │
-                                    ▼
-                    three.js viewer  ◀── GET /output/<dataset>/*.stl
-```
+These are early, descriptive results. Phantom results describe reconstruction alone, not anatomy;
+single-scan results are pilots, not evidence of generalisation. The formal attribution
+(mixed-effects models and Sobol indices) has not been run yet.
 
-**Key design decision — hybrid engines, not a single model.** The heuristic engine is fast,
-dependency-light, and validated to be near-equivalent to the AI engine for structures that are
-easy to separate by intensity (e.g. lungs, Dice ≈ 0.95). For structures that require learned
-priors (e.g. individual bones, organs), it is measurably worse (Dice ≈ 0.11) — see
-[Accuracy & Validation](#accuracy--validation). Rather than pick one engine and accept its
-weaknesses everywhere, MEDSYS exposes both and lets the deployment (and the data) decide.
+### 1. Reconstruction error on exact surfaces (RQ1, Tier 1)
 
----
+Four digital phantoms with exact signed distance functions (a sphere, a 2 mm-radius capsule, a
+torus and a rounded box), each at 5 random placements, voxelised at four spacings and reconstructed
+under 96 research configurations plus the production defaults: **7,760 meshes**, scored with exact
+surface distances.
 
-## Quick Start
+**Reference floor.** The canonical procedure (no blur, marching cubes, no smoothing, no decimation)
+is the one used to build reference surfaces in Tier 2, so its error is the floor below which
+anatomy results cannot be interpreted. ASSD in mm (HD95 in brackets), mean of 5 placements:
 
-### Web UI (local)
+| Phantom | 0.5 mm | 1 mm | 2 mm | 0.8 × 0.8 × 5 mm |
+|---|---|---|---|---|
+| Sphere | 0.070 (0.17) | 0.147 (0.34) | 0.271 (0.75) | 0.495 (1.62) |
+| Capsule, r 2 mm | 0.069 (0.17) | 0.144 (0.35) | 0.331 (0.77) | 0.634 (1.95) |
+| Torus | 0.068 (0.16) | 0.138 (0.33) | 0.278 (0.66) | 0.499 (1.61) |
+| Rounded box | 0.072 (0.17) | 0.145 (0.33) | 0.297 (0.68) | 0.525 (1.72) |
 
-```bash
-git clone https://github.com/Organic42/MEDSYS.git
-cd MEDSYS
-pip install -r requirements-full.txt
-python app.py
-# open http://127.0.0.1:8000
-```
+Roughly 0.14 × the voxel size at isotropic spacing. Placement-to-placement variation was small
+(coefficient of variation at most 0.19).
 
-### Docker Compose (full stack — API + Redis + worker)
+**What drives error.** Share of variance in log ASSD across the balanced grid: voxel spacing
+**68.6%**, shape 13.5%, blur 3.3%, Taubin smoothing 0.5%, decimation 0.3%, isosurface variant
+0.0%, placement 1.1%, interactions **12.7%**. Shares depend on the factor ranges chosen.
 
-```bash
-docker compose up --build
-docker compose up --scale worker=3      # more concurrent jobs
-docker compose --profile gpu up         # GPU worker (NVIDIA Container Toolkit)
-```
+**Stages interact, so errors cannot simply be added.** Sixty Taubin iterations *reduce* mean ASSD
+at 0.5 mm voxels (0.090 → 0.076 mm) but nearly double it at 2 mm (0.327 → 0.612 mm).
 
-### Standalone Windows build
+**The production defaults help smooth shapes and hurt thin ones.** On the sphere at 1 mm, ASSD
+falls from 0.147 to 0.088 mm. On the 2 mm-radius capsule at 2 mm voxels it rises from 0.331 to
+1.192 mm and the tube shrinks by 1.13 mm, more than half its radius. Two causes: smoothing at
+coarse spacing, and blur specified in voxels (at 5 mm slices the 0.6-voxel blur is 3 mm along the
+slice axis). The research grid therefore specifies blur in millimetres.
 
-No Python, no install — see [Standalone Windows Build](#standalone-windows-build).
+**Topology.** No mesh had holes without decimation: every open mesh came from the decimation step.
+Separately, at 0.8 × 0.8 × 5 mm the thin capsule failed topology checks in 64% of meshes, mostly
+by splitting into separate pieces: slices thicker than the 4 mm tube cannot sample it
+continuously, a resolution limit rather than a reconstruction one.
 
-### Command line
+### 2. Structural checks on a production model
 
-```bash
-python segmentation_pipeline.py --input <dicom_dir> --name <dataset_name>
-python segmentation_pipeline.py --input <dicom_dir> --name <dataset_name> --engine totalseg
-```
+The workbench checks every loaded mesh in the browser. On a 79-structure chest CT segmented by
+TotalSegmentator (fast mode) and meshed with production settings, **46 of 79** meshes are closed,
+**43 of 79** are a single piece and **58 of 79** are manifold. That is consistent with the phantom
+finding that decimation opens holes, though on real data the cause is not yet established;
+multi-piece lungs may also reflect the segmentation itself.
 
----
+### 3. Pilot: classical engine against TotalSegmentator
 
-## Deployment
+One chest CT, scored against TotalSegmentator in fast mode. This measures *agreement with an
+algorithm*, not anatomical accuracy, and motivated the research problem rather than answering it.
 
-### Free-tier hosting (Hugging Face Spaces)
-
-`Dockerfile.web` + `requirements-web.txt` build a lightweight image (no torch / TotalSegmentator
-/ Redis) sized for Hugging Face's free CPU tier (2 vCPU, 16 GB RAM, no card required):
-
-1. Create a Space at [huggingface.co/new-space](https://huggingface.co/new-space) — SDK: **Docker**, hardware: **CPU basic**.
-2. Link it to this repository (`Settings → Repository → Sync from GitHub`, branch `main`), or
-   push directly: `git remote add space https://huggingface.co/spaces/<you>/medsys && git push space main`.
-3. The Space reads the YAML block at the top of this README automatically and builds from
-   `Dockerfile.web` on port `7860`.
-
-On this deployment, MedSAM refinement and the TotalSegmentator engine are unavailable (no
-checkpoint/torch shipped); the UI detects this via `GET /api/capabilities` and disables that
-option automatically. CT, MRI brain, and PET pipelines run fully. Storage is ephemeral.
-
-### Standalone Windows build
-
-```bash
-pip install -r requirements-web.txt -r requirements-build.txt
-python -m PyInstaller medsys.spec --noconfirm
-```
-
-Output lands in `dist/MEDSYS/` — zip it and send it. The recipient unzips anywhere and
-double-clicks `MEDSYS.exe`; it starts the server and opens the UI in their browser
-automatically. No Python installation required. **Windows only** — PyInstaller builds are
-platform-specific; a macOS or Linux build requires running PyInstaller on that OS.
-
-<details>
-<summary>Why a custom entry point instead of <code>pyinstaller app.py</code></summary>
-
-<br>
-
-The app normally runs each segmentation job as a `python segmentation_pipeline.py ...`
-*subprocess* — but a frozen `.exe` has no separate interpreter to hand a script to
-(`sys.executable` **is** the exe). `entry.py` is the actual PyInstaller entry point: it
-re-invokes the exe itself with a `--run-pipeline` flag when a job needs to run, and dispatches
-straight into `segmentation_pipeline.main()` instead of starting the server. `config.py`
-resolves data paths relative to the exe's own folder when frozen, not PyInstaller's internal
-bundle directory, so results always land somewhere the user can find them.
-
-</details>
-
-### Production hardening reference
-
-| Concern | Solution |
-|---|---|
-| Jobs lost on restart | SQLite job store (`jobstore.py`), survives restarts, shared by API + workers |
-| Unbounded concurrency | Bounded `ThreadPoolExecutor` (dev) or Redis + RQ queue (prod) |
-| Scale-out | Stateless API + N worker containers sharing Redis and a `/data` volume |
-| Config & secrets | Environment-driven (`config.py`) — `REDIS_URL`, storage paths, limits, timeouts |
-| Liveness / readiness | `GET /health`, `GET /ready` |
-| Upload safety | Streamed to disk with a configurable size cap; zip contents validated |
-
----
-
-## Pipeline Stages
-
-<details>
-<summary><strong>MRI Brain</strong></summary>
-
-<br>
-
-| Stage | Operation |
-|---|---|
-| 1. Ingestion | Largest DICOM series by `SeriesInstanceUID`, sorted by slice position |
-| 2. Preprocessing | N4 bias field correction (SimpleITK) → non-local means denoising → normalization |
-| 3. Skull stripping | Brain Extraction Tool (Smith 2002); falls back to an intensity-based method on thin/anisotropic volumes where BET's surface model is unstable |
-| 4. MedSAM refinement | Box-prompted per-slice refinement of the BET mask (optional — requires a checkpoint) |
-| 5. Post-processing | Morphological cleanup, 3D largest-connected-component |
-| 6. Tissue classification | 3-class Gaussian Mixture Model → GM / WM / CSF, sequence-aware (T1 vs. T2 intensity ordering) |
-| 7. 3D reconstruction | Marching cubes → Taubin smoothing → decimation → per-tissue meshes |
-
-</details>
-
-<details>
-<summary><strong>CT Chest</strong></summary>
-
-<br>
-
-CT carries calibrated Hounsfield Units, so tissues separate by density directly:
-
-| Stage | Operation |
-|---|---|
-| 1 | `HU = pixel × RescaleSlope + RescaleIntercept` |
-| 2 | Windowing to `[-1000, 400]` HU |
-| 3 | Body/skin surface — per-slice fill, robust to airway-to-air connectivity |
-| 4 | Lungs — internal air isolated via border-clearing |
-| 5 | Skeleton — `HU > 200` inside the body mask |
-| 6 | Soft tissue — remaining voxels in a mid-HU band |
-| 7 | Colored 3D meshes with a cutaway anatomy render |
-
-</details>
-
-<details>
-<summary><strong>TotalSegmentator Engine</strong></summary>
-
-<br>
-
-DICOM → NIfTI → nnU-Net inference → per-structure mesh, for CT or MR. Produces 100+
-individually-labeled structures (every rib and vertebra, each lung lobe, major organs and
-vessels) in a single pass. GPU recommended; degrades gracefully to CPU.
-
-</details>
-
-<details>
-<summary><strong>PET (FET / FDG)</strong></summary>
-
-<br>
-
-Activity normalization → cerebral uptake region detection → tumor hotspot isolation via
-tumor-to-background ratio with head-erosion to exclude scalp uptake → maximum-intensity
-projections → 3D tumor mesh.
-
-</details>
-
----
-
-## Accuracy & Validation
-
-`validate.py` scores any segmentation against a reference on an identical voxel grid, reporting
-**Dice, IoU, Hausdorff-95 (mm), and Average Surface Distance (mm)**.
-
-**Measured result — heuristic engine vs. TotalSegmentator (reference), same chest CT:**
-
-| Structure | Dice | IoU | HD95 | ASSD | Interpretation |
+| Structure | Dice | IoU | HD95 | ASSD | Volume error |
 |---|---|---|---|---|---|
-| Lungs | **0.95** | 0.91 | 22 mm | 2.5 mm | Heuristic ≈ AI — air-filled regions separate cleanly by intensity |
-| Skeleton | **0.11** | 0.06 | 113 mm | 38 mm | Heuristic ≪ AI — intensity thresholding alone cannot recover full bone structure |
+| Lungs | 0.952 | 0.908 | 22.2 mm | 2.51 mm | −4.2% |
+| Skeleton | 0.114 | 0.061 | 112.7 mm | 37.8 mm | −53.0% |
 
-This is the empirical basis for the dual-engine design: the fast path is trustworthy where the
-physics makes the problem easy, and the deployment should route to the AI engine where it
-doesn't. Metrics are unit-tested for correctness (identical-mask, disjoint-mask, and
-voxel-spacing-scaling cases).
+### 4. Compute cost
+
+One 192-slice 1 mm brain MRI on an RTX 5080 (16 GB) and a 6-core CPU, PyTorch 2.12 with CUDA
+13.0. Times are for the stage named; "warm" excludes first-run CUDA start-up.
+
+| Stage | CPU | GPU | Speed-up |
+|---|---|---|---|
+| MedSAM refinement | 432.8 s | 24.5 s | 17.7× |
+| Whole MRI pipeline | 540 s | 132 s | 4.1× |
+| TotalSegmentator MRI, fast (3 mm) | 24.2 s | 29.2–30.5 s warm, 45.4 s first run | none |
+| TotalSegmentator MRI, full (1.5 mm) | 60.2 s | 38.7 s warm, 50.7 s first run | 1.6× |
+
+In fast mode the GPU loses: each job is a fresh process and CUDA start-up outweighs the small
+model. The cost argument for cheap classical engines is weaker than commonly assumed, which is
+why the thesis targets reliability rather than speed.
+
+## Methods
+
+**Reference standard.** Three objects are kept distinct: the *ground truth* (an expert-annotated
+mask, itself a reference standard with an inter-rater floor), the *reference surface* (a mesh
+built from that mask by one fixed, documented procedure: native-resolution marching cubes with no
+smoothing or decimation), and the *test mesh* (MEDSYS output under a given configuration). Error
+is always test mesh against reference surface.
+
+**Two tiers.** Tier 1 uses digital phantoms with analytic surfaces, which isolate reconstruction
+error exactly and measure the reference procedure's own error. Tier 2 measures end-to-end error
+on public CT datasets with expert labels, CT first (lung, bone, liver, optionally vessels), with
+brain MRI as an extension. TotalSegmentator is evaluated only on held-out or external data.
+
+**Design.** A split-plot factorial: segmentation engine (classical, TotalSegmentator 3 mm,
+TotalSegmentator 1.5 mm) × voxel spacing as the expensive whole plot; blur (0 / 0.5 / 1 mm) ×
+isosurface algorithm × Taubin iterations (0 / 10 / 30 / 60) × decimation (0 / 0.25 / 0.5 / 0.75)
+as the cheap sub-plot. The canonical baseline is TotalSegmentator 1.5 mm with the reference
+procedure; production defaults appear as one named configuration only.
+
+**Metrics.** Symmetric, area-weighted surface distances (ASSD, HD95, Hausdorff, surface Dice),
+signed mean distance (shrinkage or expansion), volume and surface-area error, and topology
+(components, boundary and non-manifold edges, genus).
+
+**Sample size.** Set by RQ2: split conformal prediction at 95% coverage needs at least 19
+calibration cases per group, so the plan is roughly 60–100 cases per structure.
+
+## Reproducing the results
 
 ```bash
-python validate.py --dicom <ct_dicoms> \
-                   --totalseg output/<dataset>/segmentations \
+pip install -r requirements-full.txt
+
+# Tier 1 phantom experiment (output/research/phantoms/<run>/)
+python -m research.phantom_experiment --preset smoke   # seconds
+python -m research.phantom_experiment --preset pilot   # 1,552 meshes, about 1 min
+python -m research.phantom_experiment --preset full    # 7,760 meshes, about 3 min on 6 cores, seed 2026
+python -m research.phantom_experiment --resummarise output/research/phantoms/<run>
+
+# Reference comparison for one scan
+python validate.py --dicom <ct_dicoms> --totalseg output/<dataset>/segmentations \
                    --out output/<dataset>/validation
+
+# Tests (65): phantom geometry, metrics, reconstruction, and the pipeline
+pytest
 ```
 
----
+Each phantom run writes one row per mesh (`results.csv`), its provenance (`run.json`: commit,
+library versions, grid, seed) and a descriptive summary (`summary.md`). Details:
+[`research/README.md`](research/README.md).
 
-## Tech Stack
+## The platform
 
-| Layer | Technology |
+MEDSYS runs end to end: upload a zipped DICOM study in the browser, and it detects the modality,
+segments it, reconstructs per-structure meshes and opens them in a 3D workbench.
+
+| | |
 |---|---|
-| API | FastAPI, Uvicorn |
-| Job queue | In-process `ThreadPoolExecutor` (default) or Redis + RQ (production) |
-| Persistence | SQLite (job state), filesystem (imaging outputs) |
-| Imaging | pydicom, SimpleITK, scikit-image, scikit-learn, nibabel, brainextractor |
-| AI segmentation | TotalSegmentator (nnU-Net), MedSAM (segment-anything), PyTorch |
-| Meshing / rendering | PyVista, VTK, matplotlib |
-| Frontend | Vanilla JS, three.js (WebGL 3D viewer) |
-| Neuroplasticity Explorer | Anthropic Claude (structured JSON, schema-constrained) with a curated fallback knowledge base |
-| Deployment | Docker, Docker Compose, Hugging Face Spaces, PyInstaller |
-| Testing | pytest, GitHub Actions |
+| **Modalities** | CT, MRI (brain) and PET, routed automatically from DICOM metadata |
+| **Engines** | A fast classical engine (intensity thresholds, BET, Gaussian mixture), and TotalSegmentator (nnU-Net) for 100+ labelled structures |
+| **Workbench** | Three columns: dataset, structures and pipeline; a 3D stage with surface, wireframe and X-ray modes; mesh checks, the reliability estimate and metrics against a reference |
+| **Honest reporting** | Mesh checks and reference metrics show measured data only; the reliability estimate stays empty until RQ2 exists, rather than showing invented numbers |
+| **Neuroplasticity Explorer** | Questions about behaviour and the brain, mapped onto a 3D brain from a curated evidence base |
+| **Deployment** | Docker Compose (API + Redis + workers), a lightweight Hugging Face Spaces image, and a standalone Windows build |
 
----
+<details>
+<summary><strong>Pipelines</strong></summary>
 
-## Repository Structure
+<br>
+
+- **CT (classical):** Hounsfield units → windowing → body mask → lungs (border clearing) →
+  skeleton (HU > 200) → soft tissue → meshes.
+- **MRI brain (classical):** N4 bias correction → non-local-means denoising → BET skull strip →
+  optional box-prompted MedSAM refinement → grey/white matter/CSF by Gaussian mixture → meshes.
+- **PET:** activity normalisation → hotspot by tumour-to-background ratio → maximum-intensity
+  projections and meshes.
+- **TotalSegmentator:** DICOM → NIfTI → nnU-Net (CT or MR task, 3 mm fast mode in the app) →
+  one mesh per structure.
+
+Every route meshes through [`reconstruction.py`](reconstruction.py): Gaussian blur of the mask,
+marching cubes, Taubin smoothing and decimation, with explicit, recordable parameters.
+
+</details>
+
+<details>
+<summary><strong>Architecture</strong></summary>
+
+<br>
+
+```
+Browser ──upload──▶ FastAPI (app.py) ──▶ job queue (in-process, or Redis + RQ)
+                                              │
+                                              ▼
+                      segmentation_pipeline.py (subprocess per job)
+                      ├─ modality detection and routing
+                      ├─ classical engine / TotalSegmentator
+                      └─ reconstruction.py ──▶ meshes + report.json
+                                              │
+              SQLite job store ◀──────────────┤
+                                              ▼
+                      Workbench (three.js) ◀── /api/datasets, /output/<dataset>/*.stl
+```
+
+Job state lives in SQLite, so it survives restarts and is shared by the API and workers. Each
+segmentation runs as a subprocess, so a crashing job cannot take the service down.
+
+</details>
+
+<details>
+<summary><strong>Running and deploying</strong></summary>
+
+<br>
+
+```bash
+# Local web app
+pip install -r requirements-full.txt
+python app.py                         # http://127.0.0.1:8000
+
+# Full stack: API + Redis + workers
+docker compose up --build
+docker compose up --scale worker=3
+
+# Command line
+python segmentation_pipeline.py --input <dicom_dir> --name <dataset>
+python segmentation_pipeline.py --input <dicom_dir> --name <dataset> --engine totalseg [--no-fast]
+```
+
+- **Hugging Face Spaces:** `Dockerfile.web` with `requirements-web.txt` builds a CPU-only image
+  without PyTorch or TotalSegmentator; the front matter at the top of this file configures the
+  Space. The UI detects missing engines through `/api/capabilities`.
+- **Windows:** `python -m PyInstaller medsys.spec --noconfirm` produces `dist/MEDSYS/`, which runs
+  without Python. The build re-invokes its own executable to run each job, since a frozen app has
+  no separate interpreter.
+- **GPU:** install a CUDA build of PyTorch that supports your card. RTX 50-series cards need
+  CUDA 12.8 or newer. Jobs fall back to the CPU when no GPU is found.
+
+</details>
+
+## Repository structure
 
 ```
 MEDSYS/
-├── app.py                     # FastAPI web service
-├── segmentation_pipeline.py   # Core modality-aware segmentation pipeline
-├── brain_knowledge.py         # Neuroplasticity Explorer knowledge base + Claude integration
-├── validate.py                # Accuracy validation (Dice / IoU / HD95 / ASSD)
-├── config.py                  # Environment-driven configuration
-├── jobstore.py                # SQLite job persistence
-├── tasks.py                   # Job execution (shared by in-process pool and RQ worker)
-├── worker.py                  # RQ worker entry point
-├── entry.py / launcher.py     # Standalone .exe entry point and desktop launcher
-├── medsys.spec                # PyInstaller build spec
-├── web/                       # Frontend (index.html, brain.html)
-├── tests/                     # Unit tests
-├── Dockerfile / Dockerfile.web / docker-compose.yml
-└── requirements*.txt          # Full / web / build dependency sets
+├── reconstruction.py          # Shared mesh reconstruction (production and research)
+├── segmentation_pipeline.py   # Modality-aware segmentation pipelines
+├── validate.py                # Reference comparison: Dice, IoU, HD95, ASSD
+├── research/                  # Tier 1 phantom experiment, exact surface metrics
+├── docs/                      # Research proposal, gap analysis, one-page summary
+├── tests/                     # 65 tests: pipeline, phantoms, metrics, reconstruction
+├── app.py, tasks.py, worker.py, jobstore.py, config.py   # Web service and job handling
+├── web/                       # Workbench and Neuroplasticity Explorer
+├── brain_knowledge.py         # Explorer evidence base
+├── entry.py, launcher.py, medsys.spec                    # Standalone Windows build
+└── Dockerfile, Dockerfile.web, docker-compose.yml, requirements*.txt
 ```
 
----
+## Roadmap
+
+**Research**
+- [x] Tier 1 phantom experiment with exact surfaces (RQ1)
+- [ ] Systematic, logged literature search to confirm novelty
+- [ ] Tier 2: public expert-annotated CT datasets, with leakage and label-bias controls
+- [ ] Formal attribution: mixed-effects models and Sobol indices
+- [ ] RQ2: reliability model with split-conformal intervals and task tolerances fixed in advance
+- [ ] RQ3: accuracy-constrained pipeline selection, with latency and energy as costs
+
+**Platform**
+- [x] Shared, parameterised reconstruction module
+- [x] GPU inference, with measured CPU and GPU timings
+- [x] Browser-side mesh checks
+- [ ] Production and research configuration profiles (parameters are still set at each call site)
+- [ ] Minimum-size thresholds in mm³ rather than voxels (the voxel cutoff is 8× stricter at 3 mm than at 1.5 mm)
+- [ ] Verified de-identification and opaque dataset identifiers
+- [ ] Benchmark the MRI route against HD-BET and SynthStrip
+- [ ] DICOM-SEG export and a provenance record on every output
+
+## Status
+
+A working research prototype. The platform runs end to end and its tests pass. The research is at
+the end of RQ1 Tier 1: phantom results exist, anatomy results do not. No claim here should be read
+as clinical accuracy.
+
+### Limitations
+
+- Phantom results describe reconstruction only; they say nothing about segmentation accuracy.
+- The pilot comparison uses one scan and an algorithmic reference, not expert annotations.
+- Compute timings come from one machine and one study.
+- The novelty of RQ1 has not yet been confirmed by a systematic literature search.
 
 ## Requirements
 
 - Python 3.10+
-- See `requirements-full.txt` (complete pipeline, all engines) or `requirements-web.txt`
-  (lightweight — no torch/TotalSegmentator/Redis, matches the hosted demo)
-- Docker (optional, for containerized deployment)
-- CUDA-capable GPU (optional — accelerates MedSAM and TotalSegmentator; both fall back to CPU)
-
----
-
-## Testing
-
-```bash
-pip install -r requirements.txt pytest
-pytest
-```
-
-Unit tests cover preprocessing, post-processing, 3D connected-component handling, and
-validation-metric correctness using synthetic data — no DICOM files or model checkpoints
-required. CI runs on every push via GitHub Actions.
-
----
-
-## Roadmap
-
-- [ ] Atlas-based priors to correct GM/WM classification on non-standard MRI contrasts
-- [ ] Dice/IoU validation against public ground-truth datasets
-- [ ] Multi-series fusion (T1 + T2 + DTI)
-- [ ] Direct Unity/Unreal VR scene export
-- [ ] macOS/Linux standalone builds
-
----
+- `requirements-full.txt` for all engines; `requirements-web.txt` for the lightweight image
+- Optional: an NVIDIA GPU with a matching CUDA build of PyTorch (MedSAM and TotalSegmentator)
+- Optional: Docker
 
 ## Contributing
 
-Issues and pull requests are welcome. Please:
+Issues and pull requests are welcome. Please run `pytest` before submitting, keep research and
+production on the shared reconstruction code, and never commit patient data, DICOM files, model
+checkpoints or pipeline output (`.gitignore` excludes them).
 
-1. Run `pytest` and ensure it passes before submitting
-2. Follow the existing modality-routing pattern when adding a new imaging modality or engine
-3. Never commit patient data, DICOM files, or model checkpoints (`.gitignore` already excludes these)
+## Citation
 
----
+```bibtex
+@software{medsys2026,
+  author = {Organic42},
+  title  = {MEDSYS: Risk-Aware Reconstruction of 3D Anatomy from Medical Scans},
+  year   = {2026},
+  url    = {https://github.com/Organic42/MEDSYS}
+}
+```
+
+MEDSYS builds on TotalSegmentator (Wasserthal et al., *Radiology: Artificial Intelligence*, 2023),
+nnU-Net (Isensee et al., *Nature Methods*, 2021), MedSAM, BET, N4ITK and marching cubes; please
+cite them where you use them.
 
 ## Disclaimer
 
-MEDSYS is provided for **educational and research purposes only**. It is not a medical device,
-has not been evaluated by any regulatory body, and must not be used to diagnose, treat, or
-otherwise make clinical decisions about any patient. Segmentation outputs — from either engine
-— are not validated for clinical accuracy and may contain errors. Always defer to qualified
-medical professionals and validated clinical software for any healthcare decision.
-
----
+MEDSYS is provided for **research and education only**. It is not a medical device, has not been
+evaluated by any regulatory body, and must not be used to diagnose, treat or otherwise make
+clinical decisions. Outputs from any engine may contain errors. Always defer to qualified
+clinicians and validated clinical software.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ## Contributors
 
-- **[Organic42](https://github.com/Organic42)** — Project maintainer
-
-<div align="center">
-<sub>Built with FastAPI, PyTorch, TotalSegmentator, PyVista, and three.js.</sub>
-</div>
+- **[Organic42](https://github.com/Organic42)** — project lead
