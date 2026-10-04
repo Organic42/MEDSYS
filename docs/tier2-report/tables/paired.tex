@@ -1,0 +1,19 @@
+\begin{tabular}{lllrrrrrr}
+\toprule
+Source & Config & Level & $n$ & At native & At level & Difference [95\% CI] & Median ratio & Wilcoxon $p$ \\
+\midrule
+Expert mask & Canonical & \texttt{iso1.5} & 41 & 0.000 & 0.204 & +0.204 [+0.198, +0.209] & -- & $<$0.001 \\
+Expert mask & Canonical & \texttt{iso3} & 41 & 0.000 & 0.418 & +0.418 [+0.408, +0.426] & -- & $<$0.001 \\
+Expert mask & Canonical & \texttt{slice5} & 14 & 0.000 & 0.445 & +0.445 [+0.411, +0.490] & -- & $<$0.001 \\
+Expert mask & Production & \texttt{iso1.5} & 41 & 0.234 & 0.374 & +0.140 [+0.125, +0.155] & 1.59$\times$ & $<$0.001 \\
+Expert mask & Production & \texttt{iso3} & 41 & 0.234 & 0.517 & +0.283 [+0.258, +0.308] & 2.25$\times$ & $<$0.001 \\
+Expert mask & Production & \texttt{slice5} & 14 & 0.176 & 0.425 & +0.248 [+0.211, +0.295] & 2.45$\times$ & $<$0.001 \\
+\midrule
+TotalSegmentator fast & Canonical & \texttt{iso1.5} & 41 & 0.901 & 0.905 & +0.004 [-0.019, +0.026] & 1.00$\times$ & 0.635 \\
+TotalSegmentator fast & Canonical & \texttt{iso3} & 41 & 0.901 & 0.907 & +0.006 [-0.006, +0.019] & 1.00$\times$ & 0.663 \\
+TotalSegmentator fast & Canonical & \texttt{slice5} & 14 & 0.890 & 1.079 & +0.188 [+0.150, +0.229] & 1.19$\times$ & $<$0.001 \\
+TotalSegmentator fast & Production & \texttt{iso1.5} & 41 & 0.948 & 0.958 & +0.010 [-0.017, +0.037] & 1.01$\times$ & 0.411 \\
+TotalSegmentator fast & Production & \texttt{iso3} & 41 & 0.948 & 0.914 & -0.034 [-0.055, -0.013] & 0.96$\times$ & 0.003 \\
+TotalSegmentator fast & Production & \texttt{slice5} & 14 & 0.915 & 1.048 & +0.134 [+0.098, +0.171] & 1.13$\times$ & $<$0.001 \\
+\bottomrule
+\end{tabular}

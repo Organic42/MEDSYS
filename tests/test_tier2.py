@@ -112,6 +112,87 @@ def test_crop_keeps_both_masks_and_reports_origin():
     assert ca.shape == (24 + 2 + 1 - 8, 14 + 2 + 1 - 8, 21 + 2 + 1 - 8)
 
 
+# ── acquisition resolution ──────────────────────────────────────────────
+
+def test_grid_spacing_only_coarsens():
+    assert tier2.grid_spacing((0.8, 0.8, 5.0), 'native') == (0.8, 0.8, 5.0)
+    assert tier2.grid_spacing((0.8, 0.8, 5.0), 'iso3') == (3.0, 3.0, 5.0)       # slice already coarser
+    assert tier2.grid_spacing((0.8, 0.8, 1.5), 'iso1.5') == (1.5, 1.5, 1.5)
+    assert tier2.grid_spacing((0.8, 0.8, 1.5), 'slice5') == (0.8, 0.8, 5.0)
+    assert tier2.grid_spacing((1.0, 1.0, 1.0), 'slice5') == (1.0, 1.0, 5.0)     # isotropic: axis 2
+    assert tier2.grid_spacing((5.0, 0.7, 0.7), 'slice5') == (5.0, 0.7, 0.7)     # slice axis found by size
+    assert tier2.effective_resolution((0.7, 0.7, 8.0), 'slice5') == 'native'
+    assert tier2.effective_resolution((0.7, 0.7, 2.0), 'slice5') == 'slice5'
+
+
+def test_grid_shape_stays_inside_the_native_extent():
+    assert tier2.grid_shape((100, 100, 20), (1, 1, 5), (3, 3, 5)) == (34, 34, 20)
+    assert tier2.grid_shape((10, 10, 10), (0.8, 0.8, 0.8), (1.5, 1.5, 1.5)) == (5, 5, 5)
+
+
+def _sphere(shape, spacing, centre_mm, radius):
+    idx = np.indices(shape).reshape(3, -1).T * np.asarray(spacing)
+    return (np.linalg.norm(idx - np.asarray(centre_mm), axis=1) < radius).reshape(shape)
+
+
+def test_resample_keeps_the_physical_frame_and_volume():
+    spacing, grid = (0.8, 0.8, 2.0), (3.0, 3.0, 3.0)
+    centre = np.array([31.0, 27.0, 33.0])
+    native = _sphere((80, 80, 34), spacing, centre, 14)
+    coarse = tier2.resample_mask(native, spacing, grid)
+    assert coarse.shape == tier2.grid_shape(native.shape, spacing, grid)
+    centroid = np.argwhere(coarse).mean(axis=0) * np.asarray(grid)
+    assert np.abs(centroid - centre).max() < 0.5                              # same world position
+    vol = coarse.sum() * np.prod(grid)
+    assert vol == pytest.approx(native.sum() * np.prod(spacing), rel=0.05)
+    assert np.array_equal(tier2.resample_mask(native, spacing, spacing), native)
+
+
+def test_to_native_round_trip():
+    spacing, grid = (0.8, 0.8, 2.0), (3.0, 3.0, 5.0)
+    native = _sphere((80, 80, 34), spacing, (31, 27, 33), 14)
+    back = tier2.to_native(tier2.resample_mask(native, spacing, grid), spacing, grid, native.shape)
+    assert back.shape == native.shape
+    dice = 2 * (back & native).sum() / (back.sum() + native.sum())
+    assert 0.85 < dice < 1.0                                                  # sampling loses a little
+    assert np.array_equal(tier2.to_native(native, spacing, spacing, native.shape), native)
+
+
+def test_resampled_image_affine_maps_coarse_voxels_onto_native_world_points():
+    nib = pytest.importorskip('nibabel')
+    affine = np.array([[-0.8, 0, 0, 120.0], [0, -0.8, 0, 90.0], [0, 0, 2.0, -300.0], [0, 0, 0, 1]])
+    img = nib.Nifti1Image(np.random.default_rng(0).normal(size=(40, 40, 12)).astype(np.float32), affine)
+    coarse = tier2.resampled_image(img, (3.0, 3.0, 3.0))
+    assert coarse.shape == (11, 11, 8)
+    assert np.allclose(coarse.header.get_zooms()[:3], (3.0, 3.0, 3.0))
+    j = np.array([4, 7, 5, 1.0])
+    native_index = np.r_[j[:3] * np.array([3 / 0.8, 3 / 0.8, 3 / 2.0]), 1]
+    assert np.allclose(coarse.affine @ j, affine @ native_index)
+
+
+def test_segment_case_caches_coarse_engine_masks(tmp_path, monkeypatch):
+    nib = pytest.importorskip('nibabel')
+    monkeypatch.setenv('VRSEG_OUTPUT', str(tmp_path / 'out'))
+    spacing = (0.8, 0.8, 2.0)
+    hu = np.where(_sphere((60, 60, 30), spacing, (24, 24, 30), 14), 700.0, -50.0).astype(np.float32)
+    img_path = str(tmp_path / 'ct.nii.gz')
+    nib.save(nib.Nifti1Image(hu, np.diag(list(spacing) + [1.0])), img_path)
+    case = ('case_1', 1, img_path, None)
+    tier2.segment_case('msd_spleen', case, ['bone'], ['classical'], 'cpu',
+                       ('native', 'iso3', 'slice5'), log=lambda *_: None)
+    for res, grid in (('native', spacing), ('iso3', (3.0, 3.0, 3.0)), ('slice5', (0.8, 0.8, 5.0))):
+        z = np.load(tier2.cached_mask_path('msd_spleen', 'case_1', 'classical', 'bone', res))
+        assert z['mask'].shape == tier2.grid_shape(hu.shape, spacing, grid)
+        assert z['mask'].sum() > 0
+    assert sorted(os.listdir(tier2.cache_dir('msd_spleen', 'case_1'))) == [
+        'classical_bone.npz', 'classical_bone@iso3.npz', 'classical_bone@slice5.npz']   # resampled CTs removed
+
+
+def test_presets_cover_resolutions():
+    assert tier2.PRESETS['full']['resolutions'] == tuple(tier2.RESOLUTIONS)
+    assert 'native' in tier2.PRESETS['smoke']['resolutions']
+
+
 # ── mesh-to-mesh metrics (PyVista) ──────────────────────────────────────
 
 def test_compare_meshes_recovers_a_1mm_expansion():
@@ -164,11 +245,12 @@ def test_run_unit_end_to_end(tmp_path, monkeypatch):
     np.savez_compressed(tier2.cached_mask_path('msd_spleen', 'case_1', 'ts_fast', 'spleen'), mask=engine)
 
     base = ('msd_spleen', 'case_1', label_path, 'spleen', (1,))
-    gt_rows = tier2.run_unit(base + ('gt', 'canonical', 0, 3000, 1.0, 0))
+    gt_rows = tier2.run_unit(base + ('gt', 'canonical', 0, 3000, 1.0, 0, 'native'))
+    assert not [r for r in gt_rows if r['level'] == 'mask']          # expert vs itself: no mask row
     canon = [r for r in gt_rows if r.get('is_canonical')][0]
     assert canon['status'] == 'ok' and canon['assd_mm'] < 1e-9      # reference reproduces itself
 
-    eng_rows = tier2.run_unit(base + ('ts_fast', 'canonical', 0, 3000, 1.0, 0))
+    eng_rows = tier2.run_unit(base + ('ts_fast', 'canonical', 0, 3000, 1.0, 0, 'native'))
     mask_row = [r for r in eng_rows if r['level'] == 'mask'][0]
     assert 0.5 < mask_row['dice'] < 1.0
     meshes = [r for r in eng_rows if r['level'] == 'mesh']
@@ -176,3 +258,20 @@ def test_run_unit_end_to_end(tmp_path, monkeypatch):
     assert all(r['status'] == 'ok' for r in meshes)
     canon = [r for r in meshes if r['is_canonical']][0]
     assert canon['mean_signed_mm'] < 0                               # smaller engine sphere: shrinkage
+
+    # 3 mm: the expert mask resampled loses a little overlap and gains surface error
+    coarse = tier2.run_unit(base + ('gt', 'canonical', 0, 3000, 1.0, 0, 'iso3'))
+    mask_row = [r for r in coarse if r['level'] == 'mask'][0]
+    assert mask_row['resampled'] and mask_row['grid_spacing'] == '3x3x3'
+    assert 0.85 < mask_row['dice'] < 1.0
+    canon = [r for r in coarse if r.get('is_canonical')][0]
+    assert canon['status'] == 'ok' and 0.05 < canon['assd_mm'] < 1.5
+    assert abs(canon['mean_signed_mm']) < 1.0                        # frames line up: no gross offset
+
+    # an engine mask cached on the coarse grid is read and scored on that grid
+    grid = tier2.grid_spacing(spacing, 'iso3')
+    np.savez_compressed(tier2.cached_mask_path('msd_spleen', 'case_1', 'ts_fast', 'spleen', 'iso3'),
+                        mask=tier2.resample_mask(engine, spacing, grid))
+    eng3 = tier2.run_unit(base + ('ts_fast', 'canonical', 0, 3000, 1.0, 0, 'iso3'))
+    assert all(r['status'] == 'ok' for r in eng3)
+    assert [r for r in eng3 if r.get('is_canonical')][0]['mean_signed_mm'] < 0
