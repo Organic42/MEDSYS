@@ -373,7 +373,8 @@ def main():
     args = ap.parse_args()
     if args.resummarise:
         import pandas as pd
-        rows = pd.read_csv(os.path.join(args.resummarise, 'results.csv')).to_dict('records')
+        path = os.path.join(args.resummarise, 'results.csv')
+        rows = pd.read_csv(path if os.path.exists(path) else path + '.gz').to_dict('records')
         with open(os.path.join(args.resummarise, 'run.json'), encoding='utf-8') as fh:
             run = json.load(fh)
         with open(os.path.join(args.resummarise, 'summary.md'), 'w', encoding='utf-8') as fh:

@@ -544,6 +544,12 @@ def run_experiment(dataset, data_root, preset='pilot', engines=('ts_fast', 'clas
 
 # ── summary ──────────────────────────────────────────────────────────────
 
+def results_file(run_dir):
+    """results.csv of a run, or the compressed copy kept in research/results/."""
+    path = os.path.join(run_dir, 'results.csv')
+    return path if os.path.exists(path) else path + '.gz'
+
+
 def eta_squared(df, y, factors):
     """Main-effect share of the variance of column y for each factor (descriptive)."""
     v = df[y]
@@ -683,7 +689,7 @@ def main():
     args = ap.parse_args()
     if args.resummarise:
         import pandas as pd
-        rows = pd.read_csv(os.path.join(args.resummarise, 'results.csv')).to_dict('records')
+        rows = pd.read_csv(results_file(args.resummarise)).to_dict('records')
         with open(os.path.join(args.resummarise, 'run.json'), encoding='utf-8') as fh:
             run = json.load(fh)
         with open(os.path.join(args.resummarise, 'summary.md'), 'w', encoding='utf-8') as fh:

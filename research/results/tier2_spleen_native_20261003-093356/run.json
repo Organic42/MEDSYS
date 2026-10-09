@@ -1,0 +1,249 @@
+{
+  "tier": 2,
+  "dataset": "msd_spleen",
+  "dataset_info": {
+    "title": "Medical Segmentation Decathlon, Task09 Spleen",
+    "licence": "CC-BY-SA 4.0",
+    "labels": "expert manual segmentation of the spleen in every training case",
+    "structures": {
+      "spleen": [
+        1
+      ]
+    },
+    "manual_cases": {}
+  },
+  "preset": "full",
+  "seed": 2026,
+  "cases": [
+    "spleen_2",
+    "spleen_3",
+    "spleen_6",
+    "spleen_8",
+    "spleen_9",
+    "spleen_10",
+    "spleen_12",
+    "spleen_13",
+    "spleen_14",
+    "spleen_16",
+    "spleen_17",
+    "spleen_18",
+    "spleen_19",
+    "spleen_20",
+    "spleen_21",
+    "spleen_22",
+    "spleen_24",
+    "spleen_25",
+    "spleen_26",
+    "spleen_27",
+    "spleen_28",
+    "spleen_29",
+    "spleen_31",
+    "spleen_32",
+    "spleen_33",
+    "spleen_38",
+    "spleen_40",
+    "spleen_41",
+    "spleen_44",
+    "spleen_45",
+    "spleen_46",
+    "spleen_47",
+    "spleen_49",
+    "spleen_52",
+    "spleen_53",
+    "spleen_56",
+    "spleen_59",
+    "spleen_60",
+    "spleen_61",
+    "spleen_62",
+    "spleen_63"
+  ],
+  "structures": [
+    "spleen"
+  ],
+  "engines": [
+    "ts_fast"
+  ],
+  "grid": "full",
+  "grid_levels": {
+    "blur_mm": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "taubin_iter": [
+      0,
+      10,
+      30,
+      60
+    ],
+    "decimation": [
+      0.0,
+      0.25,
+      0.5,
+      0.75
+    ]
+  },
+  "isosurface": "lewiner (fixed: Tier 1 found it explained 0.0% of variance)",
+  "canonical": {
+    "blur_mm": 0.0,
+    "taubin_iter": 0,
+    "decimation": 0.0
+  },
+  "production": {
+    "ts_fast/default": [
+      0.6,
+      30,
+      0.6
+    ],
+    "classical/lungs": [
+      0.7,
+      30,
+      0.5
+    ],
+    "classical/bone": [
+      0.5,
+      30,
+      0.4
+    ],
+    "gt/default": [
+      0.6,
+      30,
+      0.5
+    ]
+  },
+  "reference_surface": "canonical reconstruction of the expert mask at native spacing",
+  "samples_per_side": 20000,
+  "nsd_tolerance_mm": 1.0,
+  "segmentation_device": "gpu",
+  "segmentation_timings_s": {
+    "spleen_2": {},
+    "spleen_3": {},
+    "spleen_6": {},
+    "spleen_8": {},
+    "spleen_9": {},
+    "spleen_10": {
+      "ts_fast_s": 27.380040400000098
+    },
+    "spleen_12": {
+      "ts_fast_s": 23.603452599999855
+    },
+    "spleen_13": {
+      "ts_fast_s": 19.866094100000055
+    },
+    "spleen_14": {
+      "ts_fast_s": 19.46252800000002
+    },
+    "spleen_16": {
+      "ts_fast_s": 20.357479600000033
+    },
+    "spleen_17": {
+      "ts_fast_s": 20.008685499999956
+    },
+    "spleen_18": {
+      "ts_fast_s": 23.252601700000014
+    },
+    "spleen_19": {
+      "ts_fast_s": 19.024004600000126
+    },
+    "spleen_20": {
+      "ts_fast_s": 23.332271300000002
+    },
+    "spleen_21": {
+      "ts_fast_s": 20.189255000000003
+    },
+    "spleen_22": {
+      "ts_fast_s": 22.33255989999998
+    },
+    "spleen_24": {
+      "ts_fast_s": 21.30975340000009
+    },
+    "spleen_25": {
+      "ts_fast_s": 19.913675400000102
+    },
+    "spleen_26": {
+      "ts_fast_s": 19.515786400000025
+    },
+    "spleen_27": {
+      "ts_fast_s": 22.200719199999867
+    },
+    "spleen_28": {
+      "ts_fast_s": 19.027793599999995
+    },
+    "spleen_29": {
+      "ts_fast_s": 22.14574390000007
+    },
+    "spleen_31": {
+      "ts_fast_s": 19.1670830999999
+    },
+    "spleen_32": {
+      "ts_fast_s": 23.165473999999904
+    },
+    "spleen_33": {
+      "ts_fast_s": 21.326137400000107
+    },
+    "spleen_38": {
+      "ts_fast_s": 25.7502178000002
+    },
+    "spleen_40": {
+      "ts_fast_s": 22.182845299999826
+    },
+    "spleen_41": {
+      "ts_fast_s": 22.783377399999836
+    },
+    "spleen_44": {
+      "ts_fast_s": 22.130208699999912
+    },
+    "spleen_45": {
+      "ts_fast_s": 22.65995850000013
+    },
+    "spleen_46": {
+      "ts_fast_s": 21.083110000000033
+    },
+    "spleen_47": {
+      "ts_fast_s": 21.131338500000084
+    },
+    "spleen_49": {
+      "ts_fast_s": 19.5084746
+    },
+    "spleen_52": {
+      "ts_fast_s": 22.173287699999946
+    },
+    "spleen_53": {
+      "ts_fast_s": 23.651619299999993
+    },
+    "spleen_56": {
+      "ts_fast_s": 18.299370700000054
+    },
+    "spleen_59": {
+      "ts_fast_s": 19.310834699999987
+    },
+    "spleen_60": {
+      "ts_fast_s": 21.34487020000006
+    },
+    "spleen_61": {
+      "ts_fast_s": 21.429031899999927
+    },
+    "spleen_62": {
+      "ts_fast_s": 20.3592907000002
+    },
+    "spleen_63": {
+      "ts_fast_s": 19.68941020000011
+    }
+  },
+  "totalsegmentator_version": null,
+  "rows": 4059,
+  "units": 82,
+  "workers": 5,
+  "wall_time_s": 1182.0,
+  "commit": "abb82ed+dirty",
+  "versions": {
+    "python": "3.14.4",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "skimage": "0.26.0",
+    "pyvista": "0.48.4",
+    "vtk": "9.6.2"
+  },
+  "platform": "Windows-11-10.0.26300-SP0",
+  "cpu_count": 6
+}

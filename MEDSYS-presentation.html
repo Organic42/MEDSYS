@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MEDSYS — Final Year Project</title>
+<style>
+  :root{
+    --ink:#10192B; --light:#F6F8FA; --alt:#ECEFF3; --teal:#0E7C86;
+    --cyan:#14B8C4; --body:#46536B; --muted:#7C8798; --line:#D9DFE7;
+    --warn:#C2410C; --orange:#F97316; --white:#FFFFFF;
+    --sans:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;
+    --mono:Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#05080F;overflow:hidden;font-family:var(--sans)}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  .slide{
+    position:absolute;width:1920px;height:1080px;transform-origin:center center;
+    display:none;flex-direction:column;padding:128px 128px 160px;
+    background:var(--light);color:var(--ink);
+  }
+  .slide.on{display:flex}
+  .eyebrow{font-family:var(--mono);font-size:26px;font-weight:500;color:var(--teal);
+    letter-spacing:5px;text-transform:uppercase}
+  h1{font-size:156px;font-weight:700;line-height:1;letter-spacing:-5px}
+  h2{font-size:64px;font-weight:600;line-height:1.12}
+  h3{font-size:30px;font-weight:600;line-height:1.2}
+  p{font-size:26px;line-height:1.45;color:var(--body)}
+  .row{display:flex;gap:28px}
+  .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:26px}
+  .card{background:var(--white);padding:38px;border:1px solid var(--line);
+    border-radius:18px;display:flex;flex-direction:column;gap:14px;flex:1}
+  .card.hl{border:2px solid var(--teal)}
+  .card.bad{border:2px solid var(--warn)}
+  .dark{background:var(--ink);color:#E8EDF3}
+  .dark h2,.dark h1{color:#fff}
+  .dark p{color:#AEBACB}
+  .dark .eyebrow{color:var(--cyan)}
+  .num{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--teal)}
+  .step{display:flex;gap:22px;background:var(--white);padding:28px;
+    border:1px solid var(--line);border-radius:16px;align-items:flex-start}
+  .step h3{font-size:29px}
+  .step p{font-size:24px}
+  /* .step is declared after .dark and would otherwise win on source order,
+     leaving pale text on a white card. Restate the dark treatment here. */
+  .step.dark{background:var(--ink);border-color:var(--ink)}
+  .step.dark h3{color:var(--cyan)}
+  .step.dark p{color:#AEBACB}
+  table{border-collapse:collapse;width:100%;font-size:27px}
+  th{background:var(--ink);color:#fff;text-align:left;padding:16px 18px;font-weight:600}
+  td{padding:14px 18px;border-bottom:1px solid var(--line);color:var(--body)}
+  td.k{color:var(--ink)}
+  .mono{font-family:var(--mono)}
+  .foot{position:absolute;left:128px;bottom:64px;font-size:24px;color:var(--muted)}
+  .gap{flex:1}
+  hr{border:none;border-top:2px solid #2A3A52}
+  .bar{width:100%;height:52px;background:#22304A;border-radius:10px;overflow:hidden}
+  .bar > i{display:block;height:100%;border-radius:10px}
+  .stat{font-family:var(--mono);font-size:62px;font-weight:700;color:var(--teal);line-height:1}
+  .spread{display:flex;justify-content:space-between;align-items:baseline}
+  #hud{position:fixed;right:22px;bottom:16px;color:#5A6678;font-family:var(--mono);
+    font-size:15px;letter-spacing:1px;user-select:none}
+  #notesbox{position:fixed;left:0;right:0;bottom:0;max-height:38vh;overflow:auto;
+    background:#0B1220;color:#C7D2E0;font-size:15px;line-height:1.55;padding:18px 26px;
+    border-top:1px solid #22304A;display:none;white-space:pre-wrap}
+  #notesbox.on{display:block}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<section class="slide dark" style="justify-content:center;gap:36px;padding:128px">
+  <p class="eyebrow">Final Year Project</p>
+  <h1>MEDSYS</h1>
+  <p style="font-size:46px;font-weight:300;color:#AEBACB;max-width:1500px;line-height:1.3">From raw DICOM to explorable 3D anatomy — with the segmentation engine chosen by measurement, not assumption.</p>
+  <hr>
+  <div style="display:flex;gap:110px">
+    <div><p style="font-size:24px;color:#7C8798;letter-spacing:2px;text-transform:uppercase">Candidate</p><p style="font-size:32px;color:#E8EDF3">[Your Name] · [Roll No.]</p></div>
+    <div><p style="font-size:24px;color:#7C8798;letter-spacing:2px;text-transform:uppercase">Supervisor</p><p style="font-size:32px;color:#E8EDF3">[Supervisor Name]</p></div>
+    <div><p style="font-size:24px;color:#7C8798;letter-spacing:2px;text-transform:uppercase">Department</p><p style="font-size:32px;color:#E8EDF3">[Department], [University]</p></div>
+  </div>
+  <aside hidden>Open on the thesis, not the tool. "This project turns clinical scans into 3D anatomy in a browser — but what I want to defend today is a measurement." Twenty seconds, then move. Fill in the bracketed fields first.</aside>
+</section>
+
+<section class="slide" style="gap:52px">
+  <p class="eyebrow">The problem</p>
+  <h2 style="font-size:70px;max-width:1560px">Every CT scan already contains 3D anatomy. Getting it out takes specialist software, a trained operator, and hours.</h2>
+  <div class="row">
+    <div class="card"><h3 style="font-size:34px;color:var(--teal)">Locked in 2D</h3><p>Clinicians scroll hundreds of axial slices and rebuild the spatial relationships mentally. The volume is there; the view is not.</p></div>
+    <div class="card"><h3 style="font-size:34px;color:var(--teal)">Specialist tooling</h3><p>Desktop suites demand installation, licensing and training, with manual format conversion at nearly every step.</p></div>
+    <div class="card"><h3 style="font-size:34px;color:var(--teal)">Research code stops short</h3><p>State-of-the-art models ship as scripts, not systems: no ingestion, no interface, no deployment path.</p></div>
+  </div>
+  <aside hidden>Land the middle card hardest — examiners relate to it. The third sets up the gap slide. Don't overclaim clinical need; this is accessibility and engineering.</aside>
+</section>
+
+<section class="slide" style="gap:48px">
+  <p class="eyebrow">Objectives</p>
+  <h2>Four objectives, each with a test that settles it</h2>
+  <div class="grid2">
+    <div class="step"><span class="num">01</span><div><h3>End-to-end ingestion</h3><p>DICOM in, 3D mesh out, no manual conversion anywhere in the chain.</p></div></div>
+    <div class="step"><span class="num">02</span><div><h3>Modality routing</h3><p>Detect CT, MR or PET from metadata and dispatch automatically.</p></div></div>
+    <div class="step" style="border:2px solid var(--teal)"><span class="num">03</span><div><h3>Quantify the engine trade-off</h3><p>Score classical against deep-learning segmentation on identical voxel geometry.</p></div></div>
+    <div class="step"><span class="num">04</span><div><h3>Deployable, not demo-ware</h3><p>Web service, container, and a standalone build needing no Python.</p></div></div>
+  </div>
+  <p class="foot">Objective 03 is the project's core contribution — revisited on the conclusion slide</p>
+  <aside hidden>Most important slide for your grade. Read all four aloud, say you'll return to them. Objective 3 is outlined because it's the research contribution. Use the same words in the conclusion.</aside>
+</section>
+
+<section class="slide" style="background:var(--alt);gap:44px">
+  <p class="eyebrow">Background</p>
+  <h2>Standing on published methods, not reinventing them</h2>
+  <table>
+    <tr><th style="width:30%">Stage</th><th style="width:38%">Method adopted</th><th style="width:32%">Source</th></tr>
+    <tr><td class="k">Bias field correction</td><td class="k">N4ITK</td><td>Tustison et al. (2010)</td></tr>
+    <tr><td class="k">Skull stripping</td><td class="k">Brain Extraction Tool</td><td>Smith (2002)</td></tr>
+    <tr><td class="k">Surface extraction</td><td class="k">Marching cubes</td><td>Lorensen &amp; Cline (1987)</td></tr>
+    <tr><td class="k">Learned segmentation</td><td class="k">nnU-Net</td><td>Isensee et al. (2021)</td></tr>
+    <tr><td class="k">Anatomical labelling</td><td class="k">TotalSegmentator</td><td>Wasserthal et al. (2023)</td></tr>
+    <tr><td class="k">Promptable refinement</td><td class="k">MedSAM</td><td>Ma et al. (2024)</td></tr>
+    <tr><td class="k">Evaluation metrics</td><td class="k">Dice, IoU, HD95, ASSD</td><td>Taha &amp; Hanbury (2015)</td></tr>
+  </table>
+  <aside hidden>Say plainly: "None of these methods are mine. The contribution is the system that routes between them, and the measurement that justifies the routing." Verify every citation before submitting.</aside>
+</section>
+
+<section class="slide" style="gap:44px">
+  <p class="eyebrow">Existing work</p>
+  <h2>Three mature categories. Each solves a different third of the problem.</h2>
+  <div class="row">
+    <div class="card"><h3 style="font-size:32px">Clinical suites</h3><p class="mono" style="font-size:23px;color:var(--muted)">3D Slicer, Mimics</p><p><b>Strong:</b> full manual control, clinically trusted.</p><p style="color:var(--warn)"><b>Missing:</b> heavy install, steep training, operator-driven.</p></div>
+    <div class="card"><h3 style="font-size:32px">Research models</h3><p class="mono" style="font-size:23px;color:var(--muted)">nnU-Net, TotalSeg</p><p><b>Strong:</b> state-of-the-art accuracy, rich labelling.</p><p style="color:var(--warn)"><b>Missing:</b> CLI only, GPU-hungry, no ingestion or viewer.</p></div>
+    <div class="card"><h3 style="font-size:32px">Web viewers</h3><p class="mono" style="font-size:23px;color:var(--muted)">OHIF, Cornerstone</p><p><b>Strong:</b> browser-native, zero install.</p><p style="color:var(--warn)"><b>Missing:</b> display only — they don't segment or reconstruct.</p></div>
+  </div>
+  <aside hidden>Forty seconds. You're not criticising them — you're showing no category spans ingestion, segmentation and viewing.</aside>
+</section>
+
+<section class="slide" style="background:var(--teal);color:#fff;justify-content:center;gap:44px;padding:128px">
+  <p class="eyebrow" style="color:#C6EDF0">The gap</p>
+  <h2 style="font-size:82px;color:#fff;max-width:1600px">No accessible system spans all three — and none publishes the measurement that says which engine to trust, for which structure.</h2>
+  <hr style="border-top:2px solid #3E9AA3">
+  <p style="font-size:34px;color:#DFF3F5;max-width:1560px">Engine selection in this field is largely assumed. This project treats it as a question with a numerical answer.</p>
+  <aside hidden>Slow down. This is the pivot and the only full-colour slide — let it sit before you speak. The gap isn't a missing tool, it's a missing measurement.</aside>
+</section>
+
+<section class="slide" style="gap:40px">
+  <p class="eyebrow">Architecture</p>
+  <h2>One request path, two interchangeable engines</h2>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="card" style="padding:26px;gap:10px"><h3>Browser</h3><p style="font-size:24px">Drag-and-drop DICOM archive</p></div>
+    <span style="color:#9AA6B6;font-size:34px">&#8594;</span>
+    <div class="card" style="padding:26px;gap:10px"><h3>FastAPI</h3><p style="font-size:24px">Upload, queue, job state</p></div>
+    <span style="color:#9AA6B6;font-size:34px">&#8594;</span>
+    <div class="card" style="padding:26px;gap:10px"><h3>Router</h3><p style="font-size:24px">Reads modality tag</p></div>
+    <span style="color:#9AA6B6;font-size:34px">&#8594;</span>
+    <div class="card hl" style="padding:26px;gap:10px"><h3 style="color:var(--teal)">Engines</h3><p style="font-size:24px">Heuristic or nnU-Net</p></div>
+    <span style="color:#9AA6B6;font-size:34px">&#8594;</span>
+    <div class="card" style="padding:26px;gap:10px"><h3>Viewer</h3><p style="font-size:24px">three.js, per structure</p></div>
+  </div>
+  <div class="row">
+    <div class="card" style="background:var(--alt);border:none;padding:32px"><h3 style="font-size:28px">Jobs survive restarts</h3><p style="font-size:24px">State lives in SQLite, shared by API and workers — not process memory.</p></div>
+    <div class="card" style="background:var(--alt);border:none;padding:32px"><h3 style="font-size:28px">Scales without a rewrite</h3><p style="font-size:24px">Bounded in-process pool by default; one variable switches to Redis + RQ.</p></div>
+    <div class="card" style="background:var(--alt);border:none;padding:32px"><h3 style="font-size:28px">Isolated execution</h3><p style="font-size:24px">Segmentation runs as a subprocess — a crashing job can't take down the service.</p></div>
+  </div>
+  <aside hidden>Trace the top row, stop at Engines: "this box is the whole research question — everything else is plumbing." Bottom row is where production-engineering marks live.</aside>
+</section>
+
+<section class="slide" style="background:var(--alt);gap:40px">
+  <p class="eyebrow">Methodology — routing</p>
+  <h2>The scan declares what it is. The system listens.</h2>
+  <p style="font-size:30px;max-width:1500px">Every DICOM file carries a <b>Modality</b> tag. Reading it before any processing means one upload endpoint serves three fundamentally different physical measurements — no user choice, no guesswork.</p>
+  <div class="row">
+    <div class="card"><p class="mono" style="font-size:34px;font-weight:700;color:var(--teal)">CT</p><h3>Calibrated density</h3><p style="font-size:25px">Hounsfield Units are absolute, so tissues separate by threshold alone.</p></div>
+    <div class="card"><p class="mono" style="font-size:34px;font-weight:700;color:var(--teal)">MR</p><h3>Relative intensity</h3><p style="font-size:25px">No absolute scale, and T1 inverts T2's ordering. Needs a statistical classifier.</p></div>
+    <div class="card"><p class="mono" style="font-size:34px;font-weight:700;color:var(--teal)">PT</p><h3>Metabolic activity</h3><p style="font-size:25px">Measures uptake, not structure. Hotspots found by ratio against background.</p></div>
+  </div>
+  <p class="foot">One upload endpoint · three physically distinct pipelines · zero user configuration</p>
+  <aside hidden>The examinable point is physics, not code. CT is calibrated and MRI is not — that single fact is why one pipeline can't serve both.</aside>
+</section>
+
+<section class="slide" style="gap:36px">
+  <p class="eyebrow">Methodology — CT</p>
+  <h2>Seven deterministic stages, no training required</h2>
+  <div class="grid2" style="gap:22px">
+    <div class="step"><span class="num">01</span><div><h3>Hounsfield conversion</h3><p>Raw values rescaled to calibrated density</p></div></div>
+    <div class="step"><span class="num">02</span><div><h3>Windowing</h3><p>Clipped to the diagnostic band, −1000 to 400</p></div></div>
+    <div class="step"><span class="num">03</span><div><h3>Body mask</h3><p>Per-slice fill, immune to airway leakage</p></div></div>
+    <div class="step"><span class="num">04</span><div><h3>Lung isolation</h3><p>Internal air separated by border clearing</p></div></div>
+    <div class="step"><span class="num">05</span><div><h3>Skeleton</h3><p>Dense voxels above 200 HU inside the body</p></div></div>
+    <div class="step"><span class="num">06</span><div><h3>Soft tissue</h3><p>The remaining mid-density band</p></div></div>
+    <div class="step" style="border:2px solid var(--teal)"><span class="num">07</span><div><h3>Surface reconstruction</h3><p>Marching cubes, smoothing, decimation</p></div></div>
+    <div class="step dark" style="border:none;flex-direction:column;justify-content:center"><h3 style="color:var(--cyan)">Fully reproducible</h3><p style="font-size:24px">Same input, same output, every run — no weights, no randomness</p></div>
+  </div>
+  <aside hidden>Don't read all seven. "Seven stages, and the important property is the last box: deterministic." Then one detail — stage 3, where a naive fill leaks through the airway because lungs connect to outside air.</aside>
+</section>
+
+<section class="slide" style="gap:36px">
+  <p class="eyebrow">Methodology — MRI brain</p>
+  <h2>Without a calibrated scale, statistics replace thresholds</h2>
+  <div class="grid2" style="gap:22px">
+    <div class="step"><span class="num">01</span><div><h3>Series selection</h3><p>Largest coherent series, sorted by slice position</p></div></div>
+    <div class="step"><span class="num">02</span><div><h3>Bias correction</h3><p>N4 removes the scanner's slow intensity drift</p></div></div>
+    <div class="step"><span class="num">03</span><div><h3>Denoising</h3><p>Non-local means, then normalisation</p></div></div>
+    <div class="step"><span class="num">04</span><div><h3>Skull stripping</h3><p>BET, with a fallback for thin anisotropic volumes</p></div></div>
+    <div class="step"><span class="num">05</span><div><h3>Optional refinement</h3><p>MedSAM sharpens the mask when a checkpoint is present</p></div></div>
+    <div class="step" style="border:2px solid var(--teal)"><span class="num">06</span><div><h3>Tissue classification</h3><p>Three-class Gaussian mixture, aware of T1 vs T2 ordering</p></div></div>
+    <div class="step"><span class="num">07</span><div><h3>Reconstruction</h3><p>Marching cubes with Taubin smoothing per tissue</p></div></div>
+    <div class="step dark" style="border:none;flex-direction:column;justify-content:center"><h3 style="color:var(--cyan)">Measured output</h3><p style="font-size:24px">Grey 1035, white 404, CSF 287 cm³</p></div>
+  </div>
+  <aside hidden>Stage 6 is where they'll probe. A GMM clusters voxel intensities into three distributions; because T1 and T2 invert the brightness ordering, the class-to-tissue mapping comes from the sequence type. Remember this one.</aside>
+</section>
+
+<section class="slide" style="background:var(--alt);gap:40px">
+  <p class="eyebrow">Implementation</p>
+  <h2>Built to run somewhere other than my laptop</h2>
+  <div class="row" style="gap:24px">
+    <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">1.8k</span><p style="font-size:25px">lines of Python across ten modules</p></div>
+    <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">16/16</span><p style="font-size:25px">unit tests passing, CI on every push</p></div>
+    <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">3</span><p style="font-size:25px">distribution paths from one codebase</p></div>
+    <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">0</span><p style="font-size:25px">manual steps between upload and mesh</p></div>
+  </div>
+  <div class="row">
+    <div class="card"><h3>Stack</h3><p style="font-size:25px">FastAPI and Uvicorn serving; pydicom, SimpleITK and scikit-image for imaging; PyVista and VTK for meshing; three.js in the browser; SQLite for job state.</p></div>
+    <div class="card"><h3>The hardest problem solved</h3><p style="font-size:25px">A frozen executable has no interpreter to hand a script to — it <i>is</i> the interpreter. The standalone build re-invokes itself with a dispatch flag to run each job.</p></div>
+  </div>
+  <aside hidden>The zero maps straight to objective 1. The right card is your best engineering anecdote for "what was genuinely hard?"</aside>
+</section>
+
+<section class="slide" style="gap:36px">
+  <p class="eyebrow">Results — output</p>
+  <h2>Four pipelines, running, producing measured volumes</h2>
+  <div class="row">
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px">
+      <h3>Chest CT — 64 slices</h3>
+      <table style="font-size:26px">
+        <tr><th style="width:58%">Structure</th><th style="width:42%;text-align:right">Volume</th></tr>
+        <tr><td class="k">Lungs</td><td class="mono" style="text-align:right">5418 cm³</td></tr>
+        <tr><td class="k">Skeleton</td><td class="mono" style="text-align:right">203 cm³</td></tr>
+        <tr><td class="k">Soft tissue</td><td class="mono" style="text-align:right">13130 cm³</td></tr>
+        <tr><td class="k">Body envelope</td><td class="mono" style="text-align:right">21268 cm³</td></tr>
+      </table>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px">
+      <h3>Brain MRI — 24 slices</h3>
+      <table style="font-size:26px">
+        <tr><th style="width:58%">Tissue</th><th style="width:42%;text-align:right">Volume</th></tr>
+        <tr><td class="k">Grey matter</td><td class="mono" style="text-align:right">1035 cm³</td></tr>
+        <tr><td class="k">White matter</td><td class="mono" style="text-align:right">404 cm³</td></tr>
+        <tr><td class="k">CSF</td><td class="mono" style="text-align:right">287 cm³</td></tr>
+        <tr><td class="k">Total brain</td><td class="mono" style="text-align:right">1726 cm³</td></tr>
+      </table>
+    </div>
+    <div class="card dark" style="border:none;padding:38px;gap:20px">
+      <span class="mono" style="font-size:86px;font-weight:700;color:var(--cyan);line-height:1">79</span>
+      <h3 style="color:#E8EDF3">individually labelled structures</h3>
+      <p style="font-size:25px">Every rib and vertebra, each lung lobe, major organs and vessels — from the deep-learning engine in a single pass over the same chest scan.</p>
+    </div>
+  </div>
+  <aside hidden>Real numbers from real runs — say so. If the 1726 cm³ brain total is challenged, get ahead of it: 5 mm spacing inflates partial-volume voxels at every boundary.</aside>
+</section>
+
+<section class="slide dark" style="gap:32px">
+  <p class="eyebrow">Evaluation — the core result</p>
+  <h2 style="font-size:62px">Same scan. Same voxel grid. One engine wins twice over — and loses catastrophically.</h2>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div class="spread"><h3 style="font-size:32px;color:#E8EDF3">Lungs</h3><span class="mono" style="font-size:32px;font-weight:700;color:var(--cyan)">Dice 0.95</span></div>
+    <div class="bar"><i style="width:95.2%;background:var(--cyan)"></i></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div class="spread"><h3 style="font-size:32px;color:#E8EDF3">Skeleton</h3><span class="mono" style="font-size:32px;font-weight:700;color:var(--orange)">Dice 0.11</span></div>
+    <div class="bar"><i style="width:11.4%;background:var(--orange)"></i></div>
+  </div>
+  <table style="font-size:27px;color:#E8EDF3">
+    <tr><th style="background:#22304A;width:24%">Structure</th><th style="background:#22304A;width:14%;text-align:right">Dice</th><th style="background:#22304A;width:14%;text-align:right">IoU</th><th style="background:#22304A;width:16%;text-align:right">HD95</th><th style="background:#22304A;width:16%;text-align:right">ASSD</th><th style="background:#22304A;width:16%;text-align:right">Volume found</th></tr>
+    <tr><td style="color:#E8EDF3;border-color:#22304A">Lungs</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">0.95</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">0.91</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">22.2 mm</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">2.5 mm</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">96%</td></tr>
+    <tr><td style="color:#E8EDF3;border-color:#22304A">Skeleton</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">0.11</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">0.06</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">112.7 mm</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">37.8 mm</td><td class="mono" style="text-align:right;color:#E8EDF3;border-color:#22304A">47%</td></tr>
+  </table>
+  <p class="foot">Classical engine scored against the deep-learning engine as reference · voxel spacing 0.84 × 0.84 × 5.0 mm</p>
+  <aside hidden>The slide the whole talk exists for. Let the bars sit in silence for a beat. The last column is the punchline: 96% of reference lung volume, 47% of bone — it missed more than half the skeleton. Expect "why report a failure?" — because a measured failure is what makes the routing defensible.</aside>
+</section>
+
+<section class="slide" style="gap:44px">
+  <p class="eyebrow">Interpretation</p>
+  <h2>The gap is not a bug. It is physics.</h2>
+  <div class="row">
+    <div class="card hl" style="padding:42px;gap:18px"><h3 style="font-size:34px;color:var(--teal)">Where thresholds win</h3><p style="font-size:27px">Air inside the chest occupies an <b>isolated density island</b>, roughly −1000 to −500 HU, with nothing else nearby on the scale. A threshold is not an approximation of the right answer here — it <i>is</i> the right answer.</p><p style="font-size:27px">Learned priors add almost nothing, because the physics has already separated the classes.</p></div>
+    <div class="card bad" style="padding:42px;gap:18px"><h3 style="font-size:34px;color:var(--warn)">Where they collapse</h3><p style="font-size:27px">Bone spans a <b>wide, overlapping range</b>. Dense cortical bone is unmistakable, but trabecular bone sits amongst contrast-enhanced vessels and dense soft tissue.</p><p style="font-size:27px">No single cut-off separates them. Recovering the skeleton needs a model that knows what a vertebra <i>looks like</i>, not merely how dense it is.</p></div>
+  </div>
+  <p class="foot">Conclusion: route by structure, not by preference — the deployment and the anatomy decide the engine</p>
+  <aside hidden>This converts a number into understanding. Deliver cleanly: a threshold isn't an approximation for lungs, it's exactly correct; for bone no cut-off exists at all. "How would you improve the classical bone result?" — you can't with thresholding; it needs shape priors.</aside>
+</section>
+
+<section class="slide" style="background:var(--alt);gap:44px">
+  <p class="eyebrow" style="color:var(--warn)">Limitations</p>
+  <h2>What this project does not establish</h2>
+  <div class="grid2">
+    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>No expert ground truth</h3><p style="font-size:25px">The reference is another algorithm, not a radiologist. This measures <i>agreement</i> between engines, not accuracy against truth.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>A sample of one</h3><p style="font-size:25px">One chest volume. A clear demonstration of a mechanism, but no statistical power.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>Coarse slice spacing</h3><p style="font-size:25px">At 5 mm, partial-volume voxels inflate boundary tissues — visible in the elevated brain total.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>Not a medical device</h3><p style="font-size:25px">No regulatory clearance, no clinical validation. Educational and research use only.</p></div>
+  </div>
+  <aside hidden>Never apologise here. "Here is precisely what my result does not prove" — deliver all four flatly. Disclosing first turns a weakness into evidence of judgement.</aside>
+</section>
+
+<section class="slide" style="gap:40px">
+  <p class="eyebrow">Conclusion</p>
+  <h2>Every objective, answered with evidence</h2>
+  <table>
+    <tr><th style="width:8%">#</th><th style="width:34%">Objective</th><th style="width:58%">Evidence it was met</th></tr>
+    <tr><td class="mono" style="color:var(--teal)">01</td><td class="k">End-to-end ingestion</td><td>Upload to mesh with no manual step; four datasets reconstructed</td></tr>
+    <tr><td class="mono" style="color:var(--teal)">02</td><td class="k">Modality routing</td><td>CT, MR and PET dispatched from the metadata tag alone</td></tr>
+    <tr><td class="mono" style="color:var(--teal)">03</td><td class="k">Quantify the engine trade-off</td><td>Dice, IoU, HD95, ASSD on matched geometry — 0.95 lungs, 0.11 skeleton</td></tr>
+    <tr><td class="mono" style="color:var(--teal)">04</td><td class="k">Deployable, not demo-ware</td><td>Web service, container image and standalone build; CI green on every push</td></tr>
+  </table>
+  <div class="card dark" style="border:none;padding:34px;gap:8px">
+    <h3 style="color:var(--cyan)">The finding that shaped the system</h3>
+    <p style="font-size:26px">Engine choice is not a matter of taste. Measured on the same voxels, the fast classical path matched the deep-learning reference on lungs and failed on bone — so the system ships both and routes by structure.</p>
+  </div>
+  <aside hidden>Point back at the objectives slide as you read each row. Close on the dark box, then stop and invite questions — don't trail into future work.</aside>
+</section>
+
+<section class="slide" style="background:var(--alt);gap:44px">
+  <p class="eyebrow">Future work</p>
+  <h2>The limitations are the roadmap</h2>
+  <div class="grid2">
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Validate against ground truth</h3><p style="font-size:25px">Score both engines on a public expert-annotated dataset, turning agreement into genuine accuracy.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Widen the sample</h3><p style="font-size:25px">Repeat across many volumes and report a distribution rather than a single pair of numbers.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Atlas priors for MRI</h3><p style="font-size:25px">Correct tissue classification on non-standard contrasts where intensity clustering is unreliable.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Export to VR</h3><p style="font-size:25px">Emit scenes directly for headset review — the original motivation behind the project's working name.</p></div>
+  </div>
+  <p class="foot">The first two items convert the stated limitations into measurable next steps</p>
+  <aside hidden>Note the ordering: the first two are the limitations you admitted, now expressed as work. Thirty seconds — its job is to give examiners somewhere to aim.</aside>
+</section>
+
+<section class="slide" style="gap:36px">
+  <p class="eyebrow">References</p>
+  <h2 style="font-size:58px">Methods and tools this work builds on</h2>
+  <div class="row" style="gap:40px">
+    <div style="flex:1;display:flex;flex-direction:column;gap:18px">
+      <p style="font-size:25px">Smith, S. M. (2002). Fast robust automated brain extraction. <i>Human Brain Mapping</i>, 17(3).</p>
+      <p style="font-size:25px">Tustison, N. J. et al. (2010). N4ITK: improved N3 bias correction. <i>IEEE TMI</i>, 29(6).</p>
+      <p style="font-size:25px">Lorensen, W. E. &amp; Cline, H. E. (1987). Marching cubes: a high resolution 3D surface construction algorithm. <i>SIGGRAPH</i>.</p>
+      <p style="font-size:25px">Isensee, F. et al. (2021). nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation. <i>Nature Methods</i>, 18.</p>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:18px">
+      <p style="font-size:25px">Wasserthal, J. et al. (2023). TotalSegmentator: robust segmentation of 104 anatomic structures in CT images. <i>Radiology: AI</i>, 5(5).</p>
+      <p style="font-size:25px">Ma, J. et al. (2024). Segment anything in medical images. <i>Nature Communications</i>, 15.</p>
+      <p style="font-size:25px">Taha, A. A. &amp; Hanbury, A. (2015). Metrics for evaluating 3D medical image segmentation. <i>BMC Medical Imaging</i>, 15.</p>
+      <p style="font-size:25px">Supporting libraries: pydicom, SimpleITK, scikit-image, scikit-learn, PyVista, VTK, FastAPI, three.js.</p>
+    </div>
+  </div>
+  <p class="foot">Format these in your department's required citation style before submission</p>
+  <aside hidden>Leave this up during questions. Verify every entry against the original paper — volume and issue numbers must be checked.</aside>
+</section>
+
+</div>
+<div id="hud">1 / 18 &nbsp;·&nbsp; ← → navigate &nbsp;·&nbsp; N notes &nbsp;·&nbsp; F fullscreen</div>
+<div id="notesbox"></div>
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0, notesOn = false;
+  var hud = document.getElementById('hud'), nb = document.getElementById('notesbox');
+
+  function fit(){
+    var w = window.innerWidth  || document.documentElement.clientWidth  || 0;
+    var h = window.innerHeight || document.documentElement.clientHeight || 0;
+    var s = Math.min(w/1920, h/1080);
+    // A tab that loads in the background can report zero size, and bringing it
+    // forward fires no resize event — never let the deck collapse to nothing.
+    if(!isFinite(s) || s <= 0){ s = 1; }
+    slides.forEach(function(el){ el.style.transform = 'scale('+s+')'; });
+  }
+  function draw(){
+    slides.forEach(function(el,n){ el.classList.toggle('on', n===i); });
+    hud.innerHTML = (i+1)+' / '+slides.length+' &nbsp;·&nbsp; &#8592; &#8594; navigate &nbsp;·&nbsp; N notes &nbsp;·&nbsp; F fullscreen';
+    var a = slides[i].querySelector('aside');
+    nb.textContent = a ? a.textContent.trim() : '(no notes)';
+  }
+  function go(d){ i = Math.max(0, Math.min(slides.length-1, i+d)); draw(); }
+
+  document.addEventListener('keydown', function(e){
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){ e.preventDefault(); go(1); }
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); go(-1); }
+    else if(e.key==='Home'){ i=0; draw(); }
+    else if(e.key==='End'){ i=slides.length-1; draw(); }
+    else if(e.key==='n'||e.key==='N'){ notesOn=!notesOn; nb.classList.toggle('on', notesOn); }
+    else if(e.key==='f'||e.key==='F'){
+      if(document.fullscreenElement){ document.exitFullscreen(); }
+      else { document.documentElement.requestFullscreen(); }
+    }
+  });
+  document.addEventListener('click', function(e){
+    if(e.clientY > window.innerHeight - 160 && notesOn) return;
+    go(e.clientX < window.innerWidth/3 ? -1 : 1);
+  });
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', fit);
+  window.addEventListener('pageshow', fit);
+  document.addEventListener('visibilitychange', fit);
+  // Re-measure over the next few frames in case layout wasn't settled at load.
+  if(window.requestAnimationFrame){ requestAnimationFrame(fit); }
+  setTimeout(fit, 150); setTimeout(fit, 700);
+  fit(); draw();
+})();
+</script>
+</body>
+</html>

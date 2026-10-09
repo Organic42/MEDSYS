@@ -122,6 +122,14 @@ rows), `run.json` (dataset, licence, label rules, grid, timings, commit) and
 `summary.md`. Rows are also saved unit by unit to `partial.jsonl` while the run
 is in progress, so an interrupted run keeps its work.
 
+`paper_stats.py` adds the statistics the paper needs beyond the report:
+scan-clustered bootstrap CIs for the variance shares, a random-intercept
+variance-component estimate, leave-one-scan-out and leave-one-level-out
+validation of the sampling relationship, and a grid comparison at identical
+physical settings. The per-mesh results of the runs behind the paper are kept,
+compressed, in [`results/`](results/); see
+[`docs/paper/README.md`](../docs/paper/README.md) for the full reproduction.
+
 `tier2_report.py` turns a run into the figures, LaTeX tables and
 `numbers.json` behind `docs/tier2-report/tier2-resolution-report.tex`. That
 way every number in the report comes from `results.csv`:

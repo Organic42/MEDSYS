@@ -1,0 +1,129 @@
+{
+  "preset": "full",
+  "seed": 2026,
+  "nsd_tolerance_mm": 1.0,
+  "samples_per_side": 20000,
+  "grid": {
+    "blur_mm": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "isosurface": [
+      "lewiner",
+      "lorensen"
+    ],
+    "taubin_iter": [
+      0,
+      10,
+      30,
+      60
+    ],
+    "decimation": [
+      0.0,
+      0.25,
+      0.5,
+      0.75
+    ]
+  },
+  "canonical": {
+    "blur_mm": 0.0,
+    "isosurface": "lewiner",
+    "taubin_iter": 0,
+    "decimation": 0.0
+  },
+  "production": {
+    "blur_vox": 0.6,
+    "isosurface": "lewiner",
+    "taubin_iter": 30,
+    "decimation": 0.5
+  },
+  "spacings_mm": [
+    [
+      0.5,
+      0.5,
+      0.5
+    ],
+    [
+      1.0,
+      1.0,
+      1.0
+    ],
+    [
+      2.0,
+      2.0,
+      2.0
+    ],
+    [
+      0.8,
+      0.8,
+      5.0
+    ]
+  ],
+  "placements": 5,
+  "placement_offset_mm": 5.0,
+  "phantoms": [
+    {
+      "name": "sphere",
+      "class": "Sphere",
+      "params": {
+        "r": 15.0
+      },
+      "volume_mm3": 14137.166941154068,
+      "area_mm2": 2827.4333882308138,
+      "genus": 0
+    },
+    {
+      "name": "capsule",
+      "class": "Capsule",
+      "params": {
+        "r": 2.0,
+        "h": 20.0
+      },
+      "volume_mm3": 536.165146212658,
+      "area_mm2": 552.9203070318035,
+      "genus": 0
+    },
+    {
+      "name": "torus",
+      "class": "Torus",
+      "params": {
+        "R": 18.0,
+        "r": 6.0
+      },
+      "volume_mm3": 12791.007303811808,
+      "area_mm2": 4263.669101270603,
+      "genus": 1
+    },
+    {
+      "name": "rounded_box",
+      "class": "RoundedBox",
+      "params": {
+        "b": [
+          14.0,
+          10.0,
+          6.0
+        ],
+        "rr": 2.0
+      },
+      "volume_mm3": 12051.49255849984,
+      "area_mm2": 3076.247719318987,
+      "genus": 0
+    }
+  ],
+  "meshes": 7760,
+  "units": 80,
+  "workers": 5,
+  "wall_time_s": 168.6,
+  "commit": "130686f+dirty",
+  "versions": {
+    "python": "3.14.4",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "skimage": "0.26.0",
+    "pyvista": "0.48.4",
+    "vtk": "9.6.2"
+  },
+  "platform": "Windows-11-10.0.26300-SP0",
+  "cpu_count": 6
+}

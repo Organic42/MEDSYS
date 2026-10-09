@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from research.tier2 import RESOLUTIONS, eta_squared  # noqa: E402
+from research.tier2 import RESOLUTIONS, eta_squared, results_file  # noqa: E402
 
 # MEDSYS palette: dark text for native, anatomy colours for the coarser levels.
 COLOURS = {'native': '#1F2933', 'iso1.5': '#4F91D9', 'iso3': '#FF7A18', 'slice5': '#2A9D8F'}
@@ -38,7 +38,7 @@ def _bool(s):
 
 
 def load(run_dir):
-    df = pd.read_csv(os.path.join(run_dir, 'results.csv'))
+    df = pd.read_csv(results_file(run_dir))
     with open(os.path.join(run_dir, 'run.json'), encoding='utf-8') as fh:
         run = json.load(fh)
     for col in ('resampled', 'is_canonical', 'topology_ok'):
@@ -517,7 +517,7 @@ def main():
     ap.add_argument('--baseline', default=None, help='earlier native-only run for the reproducibility table')
     args = ap.parse_args()
     df, run = load(args.run_dir)
-    baseline = pd.read_csv(os.path.join(args.baseline, 'results.csv')) if args.baseline else None
+    baseline = pd.read_csv(results_file(args.baseline)) if args.baseline else None
     nums = tables(df, run, os.path.join(args.out, 'tables'), baseline)
     figures(df, os.path.join(args.out, 'figures'))
     nums['run_dir'] = os.path.relpath(args.run_dir, ROOT).replace('\\', '/')
