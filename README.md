@@ -16,15 +16,22 @@ license: mit
 
 **Risk-aware reconstruction of 3D anatomy from medical scans**
 
-A research project and an open platform: it turns DICOM studies into per-structure 3D meshes,
-and measures how far those meshes can be trusted.
+An open platform that turns DICOM studies into per-structure 3D models, and a research project
+that measures how far those models can be trusted.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](#requirements)
 [![CI](https://github.com/Organic42/MEDSYS/actions/workflows/python-app.yml/badge.svg)](https://github.com/Organic42/MEDSYS/actions/workflows/python-app.yml)
-[![Status: research prototype](https://img.shields.io/badge/status-research%20prototype-orange.svg)](#status)
+[![Paper](https://img.shields.io/badge/paper-v1.0--paper-orange.svg)](https://github.com/Organic42/MEDSYS/releases/tag/v1.0-paper)
+[![Status: research prototype](https://img.shields.io/badge/status-research%20prototype-lightgrey.svg)](#status)
 
-[Research question](#research-question) · [Findings so far](#findings-so-far) · [Methods](#methods) · [Reproduce](#reproducing-the-results) · [Platform](#the-platform) · [Roadmap](#roadmap) · [Cite](#citation)
+[Product](#the-product) · [Results](#research-results) · [Paper](#paper) · [Reproduce](#reproducing-the-results) · [Run it](#running-medsys) · [Roadmap](#roadmap) · [Cite](#citation)
+
+<br>
+
+<img src="docs/images/workbench-xray.png" alt="MEDSYS workbench showing a chest CT with 79 structures in X-ray mode, structure list on the left and mesh checks on the right" width="100%">
+
+<sub>The workbench on a chest CT segmented by TotalSegmentator: 79 structures in X-ray mode, with live structural checks of every mesh on the right.</sub>
 
 </div>
 
@@ -33,52 +40,110 @@ and measures how far those meshes can be trusted.
 > **Not a medical device.** MEDSYS is for research and education. It is not cleared or certified
 > for clinical use and must not inform diagnosis or treatment. See [Disclaimer](#disclaimer).
 
-## Summary
+## At a glance
 
-Automated pipelines can turn a CT or MRI scan into a 3D model in minutes, but they do not say how
-far that model's surface may be from the real anatomy. Error enters at every stage (segmentation,
-voxel size, blurring, surface extraction, smoothing, simplification), and the stages interact.
+| | |
+|---|---|
+| **23,832** | meshes scored against exact or expert reference surfaces |
+| **41** | expert-labelled CT scans, each resampled to 4 acquisition resolutions |
+| **0.177 mm** | surface error added per mm of lost sampling (95% CI 0.171–0.184) |
+| **89.5%** | of an AI engine's surface-error variance that is patient-to-patient |
+| **66% → 95%** | closed meshes when TotalSegmentator output is meshed on its own 3 mm grid |
+| **17.7×** | GPU speed-up of MedSAM refinement (432.8 s → 24.5 s) |
+| **91** | automated tests |
 
-**Thesis.** This project develops a risk-aware framework for automated DICOM-to-3D anatomical
-reconstruction that quantifies stage-wise geometric error, predicts final-mesh reliability without
-ground truth, and selects reconstruction pipelines subject to task-specific accuracy and
-computational constraints. In short: **measure → predict → decide**.
+## The product
 
-MEDSYS, the platform in this repository, is both the system under study and the instrument used
-to study it. Production and research run the same reconstruction code
-([`reconstruction.py`](reconstruction.py)), so a result measured here describes the meshes the
-app actually ships.
+Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segments it, builds one
+3D mesh per structure and opens the result in a three-column workbench.
+
+<img src="docs/images/anatomy-renders.png" alt="Anterior, lateral, posterior and superior renders of 79 structures segmented from a chest CT" width="100%">
+
+<sub>Pipeline output for the same chest CT: anterior, lateral, posterior and superior views of all 79 structures.</sub>
+
+| | |
+|---|---|
+| **Modalities** | CT, MRI (brain) and PET, routed automatically from DICOM metadata |
+| **Engines** | A fast classical engine (intensity thresholds, BET, Gaussian mixture) and TotalSegmentator (nnU-Net) for 100+ labelled structures, with MedSAM refinement for MRI |
+| **Workbench** | Dataset, structures and pipeline on the left; a 3D stage with surface, wireframe and X-ray modes in the centre; mesh checks, the reliability estimate and reference metrics on the right |
+| **Measured, not guessed** | Mesh checks show real structural data (on the CT above: 46 of 79 meshes closed, 43 of 79 in one piece, 58 of 79 manifold, 817,158 triangles). The reliability estimate stays empty until the research supports it, rather than showing invented numbers |
+| **Neuroplasticity Explorer** | Questions about behaviour and the brain, answered from a curated evidence base and mapped onto a 3D brain |
+| **Deployment** | Docker Compose (API, Redis and workers), a lightweight Hugging Face Spaces image, and a standalone Windows build |
+
+<img src="docs/images/explorer.png" alt="Neuroplasticity Explorer answering how regular exercise changes the brain, with four highlighted regions and their evidence" width="100%">
+
+<sub>The Neuroplasticity Explorer: asking how regular exercise changes the brain highlights the four regions most affected and tags each finding by the strength of its evidence.</sub>
 
 ## Research question
 
-| | Question | Role | Status |
-|---|---|---|---|
-| **RQ1 — Measure** | Which pipeline stages, and which interactions between them, contribute most to final anatomical geometric error? | Core thesis | Tier 1 (phantoms) done; Tier 2 (anatomy) next |
-| **RQ2 — Predict** | Can final-mesh error and task suitability be predicted without ground truth at inference time, with empirically calibrated coverage? | Major extension | Planned |
-| **RQ3 — Decide** | Can those predictions select the lowest-cost pipeline that satisfies a predefined task-specific reliability constraint? | Applied extension | Planned |
+Automated pipelines can turn a CT scan into a 3D model in minutes, but they do not say how far
+that model's surface may be from the real anatomy. Error enters at every stage (acquisition
+resolution, segmentation, blurring, surface extraction, smoothing, simplification), and the
+stages interact. The thesis is **measure → predict → decide**:
 
-Each question builds on the one before it. RQ2 is only distinct from existing segmentation quality
-control if RQ1 shows that reconstruction stages or topology matter. The full proposal, with its
-literature basis, is in [`docs/gap-analysis-two-pager.tex`](docs/gap-analysis-two-pager.tex)
-(plain text: [`.txt`](docs/gap-analysis-two-pager.txt)); the evidence log behind it is
-[`docs/literature-gap-analysis.md`](docs/literature-gap-analysis.md).
+| | Question | Status |
+|---|---|---|
+| **RQ1 — Measure** | Which pipeline stages, and which interactions between them, contribute most to final geometric error? | Phantoms and 41 expert-labelled CT scans done; a second dataset (CT-ORG) next |
+| **RQ2 — Predict** | Can final-mesh error be predicted without ground truth, with calibrated coverage? | Planned |
+| **RQ3 — Decide** | Can those predictions select the cheapest pipeline that meets a task's accuracy requirement? | Planned |
 
-## Findings so far
+Production and research run the same reconstruction code ([`reconstruction.py`](reconstruction.py)),
+so every result below describes the meshes the app actually ships.
 
-These are early, descriptive results. Phantom results describe reconstruction alone, not anatomy;
-single-scan results are pilots, not evidence of generalisation. The formal attribution
-(mixed-effects models and Sobol indices) has not been run yet.
+## Research results
 
-### 1. Reconstruction error on exact surfaces (RQ1, Tier 1)
+<img src="docs/images/study-overview.png" alt="Study design: Tier 1 scores phantom reconstructions against exact surfaces; Tier 2 resamples expert-labelled CT before segmentation and scores meshes against the expert reference surface" width="100%">
 
-Four digital phantoms with exact signed distance functions (a sphere, a 2 mm-radius capsule, a
-torus and a rounded box), each at 5 random placements, voxelised at four spacings and reconstructed
-under 96 research configurations plus the production defaults: **7,760 meshes**, scored with exact
-surface distances.
+Two references, one factorial design. **Tier 1** reconstructs four analytic phantoms (sphere, thin
+capsule, torus, rounded box) at four voxel spacings under 97 configurations, 7,760 meshes, and
+scores them against their exact surfaces. **Tier 2** resamples 41 expert-labelled spleen CT scans
+(Medical Segmentation Decathlon) to four resolution levels *before* segmentation, segments them
+with TotalSegmentator, and reconstructs both the expert mask and the engine's mask under 49
+configurations, 16,072 meshes, scored against the expert surface.
 
-**Reference floor.** The canonical procedure (no blur, marching cubes, no smoothing, no decimation)
-is the one used to build reference surfaces in Tier 2, so its error is the floor below which
-anatomy results cannot be interpreted. ASSD in mm (HD95 in brackets), mean of 5 placements:
+### Tier 2: what resolution does to a correct segmentation and to an AI engine
+
+Mean across scans; distances are ASSD in mm against the expert reference surface; `slice5` covers
+the 14 scans it actually resampled.
+
+| Source | Resolution | Dice | ASSD, canonical | ASSD, production | Closed meshes |
+|---|---|---|---|---|---|
+| Expert mask | native | – | 0.000 | 0.234 | 98% |
+| | 1.5 mm | 0.985 | 0.204 | 0.374 | 95% |
+| | 3 mm | 0.968 | 0.418 | 0.517 | 98% |
+| | 5 mm slices | 0.971 | 0.445 | 0.425 | 93% |
+| TotalSegmentator (fast) | native | 0.940 | 0.901 | 0.948 | 66% |
+| | 1.5 mm | 0.940 | 0.905 | 0.958 | 90% |
+| | 3 mm | 0.940 | 0.907 | 0.914 | 95% |
+| | 5 mm slices | 0.926 | 1.079 | 1.048 | 50% |
+
+<img src="docs/images/assd-by-resolution.png" alt="ASSD to the reference surface by resolution level for the expert mask and for TotalSegmentator, canonical and production settings" width="100%">
+
+**Key findings**
+
+- **Coarser scans move even a perfect segmentation, and Dice hides it.** The expert mask's surface
+  moves 0.20, 0.42 and 0.45 mm at 1.5 mm, 3 mm and 5 mm slices while Dice stays at or above 0.968.
+- **A simple sampling relationship.** That movement follows ASSD ≈ 0.177 × Δ (95% CI 0.171–0.184,
+  R² 0.76), where Δ is the sampling added by coarsening. It predicts held-out scans almost as well
+  (leave-one-scan-out R² 0.75, mean absolute error 0.037 mm), and agrees with the 0.14 × voxel floor
+  measured on exact phantom surfaces.
+- **For an AI engine, the patient dominates.** Patient-to-patient variation explains 89.5% of
+  TotalSegmentator's error variance (95% CI 65.0–95.2%; 94.2% in a random-intercept model).
+  Its error does not change from native to 3 mm grids (0.901 → 0.907 mm) but rises by 0.188 mm
+  with 5 mm slices.
+- **Stages interact, so errors cannot simply be added.** On phantoms, interactions carry about a
+  third of the error variance, and smoothing helps compact shapes but quadruples the thin capsule's
+  error at 2 mm (0.425 → 1.696 mm).
+- **Decimation costs topology, not geometry.** On unsmoothed meshes, removing up to 50% of faces
+  leaves the surface unchanged in 34–39 of 41 scans, yet at 75% only 57–83% of meshes stay closed.
+- **A practical fix.** Meshing TotalSegmentator's output on its own 3 mm grid raises closed meshes
+  from 66% to 95% and cuts the median mesh from 19,520 to 2,600 faces. At identical physical
+  settings, the accuracy change is negligible (−0.017 mm); the gain is topology and size.
+
+### Tier 1: reconstruction error against exact surfaces
+
+ASSD in mm (HD95 in brackets) of the canonical reconstruction, mean of five placements. It is
+about 0.14 × the voxel size and sets the floor below which anatomy results cannot be interpreted.
 
 | Phantom | 0.5 mm | 1 mm | 2 mm | 0.8 × 0.8 × 5 mm |
 |---|---|---|---|---|
@@ -87,123 +152,81 @@ anatomy results cannot be interpreted. ASSD in mm (HD95 in brackets), mean of 5 
 | Torus | 0.068 (0.16) | 0.138 (0.33) | 0.278 (0.66) | 0.499 (1.61) |
 | Rounded box | 0.072 (0.17) | 0.145 (0.33) | 0.297 (0.68) | 0.525 (1.72) |
 
-Roughly 0.14 × the voxel size at isotropic spacing. Placement-to-placement variation was small
-(coefficient of variation at most 0.19).
+Voxel spacing is the largest factor (38.8% of error variance, 95% CI 36.1–42.0%; 68.6% on a log
+scale). The app's default settings shrink the 2 mm capsule by 1.13 mm at 2 mm voxels, more than
+half its radius, because their blur is set in voxels.
 
-**What drives error.** Share of variance in log ASSD across the balanced grid: voxel spacing
-**68.6%**, shape 13.5%, blur 3.3%, Taubin smoothing 0.5%, decimation 0.3%, isosurface variant
-0.0%, placement 1.1%, interactions **12.7%**. Shares depend on the factor ranges chosen.
+### Compute cost
 
-**Stages interact, so errors cannot simply be added.** Sixty Taubin iterations *reduce* mean ASSD
-at 0.5 mm voxels (0.090 → 0.076 mm) but nearly double it at 2 mm (0.327 → 0.612 mm).
-
-**The production defaults help smooth shapes and hurt thin ones.** On the sphere at 1 mm, ASSD
-falls from 0.147 to 0.088 mm. On the 2 mm-radius capsule at 2 mm voxels it rises from 0.331 to
-1.192 mm and the tube shrinks by 1.13 mm, more than half its radius. Two causes: smoothing at
-coarse spacing, and blur specified in voxels (at 5 mm slices the 0.6-voxel blur is 3 mm along the
-slice axis). The research grid therefore specifies blur in millimetres.
-
-**Topology.** No mesh had holes without decimation: every open mesh came from the decimation step.
-Separately, at 0.8 × 0.8 × 5 mm the thin capsule failed topology checks in 64% of meshes, mostly
-by splitting into separate pieces: slices thicker than the 4 mm tube cannot sample it
-continuously, a resolution limit rather than a reconstruction one.
-
-### 2. Structural checks on a production model
-
-The workbench checks every loaded mesh in the browser. On a 79-structure chest CT segmented by
-TotalSegmentator (fast mode) and meshed with production settings, **46 of 79** meshes are closed,
-**43 of 79** are a single piece and **58 of 79** are manifold. That is consistent with the phantom
-finding that decimation opens holes, though on real data the cause is not yet established;
-multi-piece lungs may also reflect the segmentation itself.
-
-### 3. Pilot: classical engine against TotalSegmentator
-
-One chest CT, scored against TotalSegmentator in fast mode. This measures *agreement with an
-algorithm*, not anatomical accuracy, and motivated the research problem rather than answering it.
-
-| Structure | Dice | IoU | HD95 | ASSD | Volume error |
-|---|---|---|---|---|---|
-| Lungs | 0.952 | 0.908 | 22.2 mm | 2.51 mm | −4.2% |
-| Skeleton | 0.114 | 0.061 | 112.7 mm | 37.8 mm | −53.0% |
-
-### 4. Compute cost
-
-One 192-slice 1 mm brain MRI on an RTX 5080 (16 GB) and a 6-core CPU, PyTorch 2.12 with CUDA
-13.0. Times are for the stage named; "warm" excludes first-run CUDA start-up.
+One 192-slice 1 mm brain MRI on an RTX 5080 (16 GB) and a 6-core CPU, PyTorch 2.12 with CUDA 13.0.
 
 | Stage | CPU | GPU | Speed-up |
 |---|---|---|---|
 | MedSAM refinement | 432.8 s | 24.5 s | 17.7× |
 | Whole MRI pipeline | 540 s | 132 s | 4.1× |
-| TotalSegmentator MRI, fast (3 mm) | 24.2 s | 29.2–30.5 s warm, 45.4 s first run | none |
-| TotalSegmentator MRI, full (1.5 mm) | 60.2 s | 38.7 s warm, 50.7 s first run | 1.6× |
+| TotalSegmentator MRI, fast (3 mm) | 24.2 s | 29.2–30.5 s warm | none |
+| TotalSegmentator MRI, full (1.5 mm) | 60.2 s | 38.7 s warm | 1.6× |
 
-In fast mode the GPU loses: each job is a fresh process and CUDA start-up outweighs the small
-model. The cost argument for cheap classical engines is weaker than commonly assumed, which is
-why the thesis targets reliability rather than speed.
+On CT, TotalSegmentator fast mode took 17–30 s per scan on the GPU across the 96 Tier 2 runs.
 
-## Methods
+## Paper
 
-**Reference standard.** Three objects are kept distinct: the *ground truth* (an expert-annotated
-mask, itself a reference standard with an inter-rater floor), the *reference surface* (a mesh
-built from that mask by one fixed, documented procedure: native-resolution marching cubes with no
-smoothing or decimation), and the *test mesh* (MEDSYS output under a given configuration). Error
-is always test mesh against reference surface.
+**Stage-Wise Attribution of Geometric Error in Automatic Anatomical Surface Reconstruction From
+Computed Tomography.** Sameer Morya and Sarthak Wage. IEEE conference format, 6 pages.
 
-**Two tiers.** Tier 1 uses digital phantoms with analytic surfaces, which isolate reconstruction
-error exactly and measure the reference procedure's own error. Tier 2 measures end-to-end error
-on public CT datasets with expert labels, CT first (lung, bone, liver, optionally vessels), with
-brain MRI as an extension. TotalSegmentator is evaluated only on held-out or external data.
-
-**Design.** A split-plot factorial: segmentation engine (classical, TotalSegmentator 3 mm,
-TotalSegmentator 1.5 mm) × voxel spacing as the expensive whole plot; blur (0 / 0.5 / 1 mm) ×
-isosurface algorithm × Taubin iterations (0 / 10 / 30 / 60) × decimation (0 / 0.25 / 0.5 / 0.75)
-as the cheap sub-plot. The canonical baseline is TotalSegmentator 1.5 mm with the reference
-procedure; production defaults appear as one named configuration only.
-
-**Metrics.** Symmetric, area-weighted surface distances (ASSD, HD95, Hausdorff, surface Dice),
-signed mean distance (shrinkage or expansion), volume and surface-area error, and topology
-(components, boundary and non-manifold edges, genus).
-
-**Sample size.** Set by RQ2: split conformal prediction at 95% coverage needs at least 19
-calibration cases per group, so the plan is roughly 60–100 cases per structure.
+- PDF: [`docs/paper/medsys-paper.pdf`](docs/paper/medsys-paper.pdf), also attached to release
+  [`v1.0-paper`](https://github.com/Organic42/MEDSYS/releases/tag/v1.0-paper)
+- Source and reproduction steps: [`docs/paper/`](docs/paper/)
+- Longer Tier 2 report: [`docs/tier2-report/`](docs/tier2-report/)
 
 ## Reproducing the results
+
+Every table and figure is generated from the saved per-mesh results in
+[`research/results/`](research/results/), so they can be rebuilt without re-running the experiments.
 
 ```bash
 pip install -r requirements-full.txt
 
-# Tier 1 phantom experiment (output/research/phantoms/<run>/)
-python -m research.phantom_experiment --preset smoke   # seconds
-python -m research.phantom_experiment --preset pilot   # 1,552 meshes, about 1 min
-python -m research.phantom_experiment --preset full    # 7,760 meshes, about 3 min on 6 cores, seed 2026
-python -m research.phantom_experiment --resummarise output/research/phantoms/<run>
+# Rebuild the paper's statistics, tables and figures from the saved results
+python -m research.paper_stats --tier1 research/results/tier1_phantoms_20261002-222422_full \
+       --tier2 research/results/tier2_spleen_resolution_20261004-214129 --out docs/paper
 
-# Reference comparison for one scan
-python validate.py --dicom <ct_dicoms> --totalseg output/<dataset>/segmentations \
-                   --out output/<dataset>/validation
+# Or re-run the experiments (seed 2026)
+python -m research.phantom_experiment --preset full      # 7,760 meshes, about 3 min on 6 cores
+python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset full --workers 5
 
-# Tests (65): phantom geometry, metrics, reconstruction, and the pipeline
-pytest
+# Tests
+pytest                                                   # 91 tests
 ```
 
-Each phantom run writes one row per mesh (`results.csv`), its provenance (`run.json`: commit,
-library versions, grid, seed) and a descriptive summary (`summary.md`). Details:
+Full commands, software versions and a map from each paper item to its source:
+[`docs/paper/README.md`](docs/paper/README.md). Experiment details:
 [`research/README.md`](research/README.md).
 
-## The platform
+## Running MEDSYS
 
-MEDSYS runs end to end: upload a zipped DICOM study in the browser, and it detects the modality,
-segments it, reconstructs per-structure meshes and opens them in a 3D workbench.
+```bash
+pip install -r requirements-full.txt
+python app.py                         # http://127.0.0.1:8000
 
-| | |
-|---|---|
-| **Modalities** | CT, MRI (brain) and PET, routed automatically from DICOM metadata |
-| **Engines** | A fast classical engine (intensity thresholds, BET, Gaussian mixture), and TotalSegmentator (nnU-Net) for 100+ labelled structures |
-| **Workbench** | Three columns: dataset, structures and pipeline; a 3D stage with surface, wireframe and X-ray modes; mesh checks, the reliability estimate and metrics against a reference |
-| **Honest reporting** | Mesh checks and reference metrics show measured data only; the reliability estimate stays empty until RQ2 exists, rather than showing invented numbers |
-| **Neuroplasticity Explorer** | Questions about behaviour and the brain, mapped onto a 3D brain from a curated evidence base |
-| **Deployment** | Docker Compose (API + Redis + workers), a lightweight Hugging Face Spaces image, and a standalone Windows build |
+docker compose up --build             # API + Redis + workers
+python segmentation_pipeline.py --input <dicom_dir> --name <dataset> --engine totalseg
+```
+
+<details>
+<summary><strong>Deployment options</strong></summary>
+
+<br>
+
+- **Hugging Face Spaces:** `Dockerfile.web` with `requirements-web.txt` builds a CPU-only image
+  without PyTorch or TotalSegmentator; the front matter at the top of this file configures the
+  Space. The UI detects missing engines through `/api/capabilities`.
+- **Windows:** `python -m PyInstaller medsys.spec --noconfirm` produces `dist/MEDSYS/`, which runs
+  without Python.
+- **GPU:** install a CUDA build of PyTorch that supports your card. RTX 50-series cards need
+  CUDA 12.8 or newer. Jobs fall back to the CPU when no GPU is found.
+
+</details>
 
 <details>
 <summary><strong>Pipelines</strong></summary>
@@ -248,36 +271,6 @@ segmentation runs as a subprocess, so a crashing job cannot take the service dow
 
 </details>
 
-<details>
-<summary><strong>Running and deploying</strong></summary>
-
-<br>
-
-```bash
-# Local web app
-pip install -r requirements-full.txt
-python app.py                         # http://127.0.0.1:8000
-
-# Full stack: API + Redis + workers
-docker compose up --build
-docker compose up --scale worker=3
-
-# Command line
-python segmentation_pipeline.py --input <dicom_dir> --name <dataset>
-python segmentation_pipeline.py --input <dicom_dir> --name <dataset> --engine totalseg [--no-fast]
-```
-
-- **Hugging Face Spaces:** `Dockerfile.web` with `requirements-web.txt` builds a CPU-only image
-  without PyTorch or TotalSegmentator; the front matter at the top of this file configures the
-  Space. The UI detects missing engines through `/api/capabilities`.
-- **Windows:** `python -m PyInstaller medsys.spec --noconfirm` produces `dist/MEDSYS/`, which runs
-  without Python. The build re-invokes its own executable to run each job, since a frozen app has
-  no separate interpreter.
-- **GPU:** install a CUDA build of PyTorch that supports your card. RTX 50-series cards need
-  CUDA 12.8 or newer. Jobs fall back to the CPU when no GPU is found.
-
-</details>
-
 ## Repository structure
 
 ```
@@ -285,48 +278,50 @@ MEDSYS/
 ├── reconstruction.py          # Shared mesh reconstruction (production and research)
 ├── segmentation_pipeline.py   # Modality-aware segmentation pipelines
 ├── validate.py                # Reference comparison: Dice, IoU, HD95, ASSD
-├── research/                  # Tier 1 phantom experiment, exact surface metrics
-├── docs/                      # Research proposal, gap analysis, one-page summary
-├── tests/                     # 65 tests: pipeline, phantoms, metrics, reconstruction
+├── research/                  # Tier 1 and Tier 2 experiments, metrics, paper statistics
+│   └── results/               # Per-mesh results behind the paper (compressed)
+├── docs/
+│   ├── paper/                 # The paper: LaTeX, figures, PDF, reproduction steps
+│   ├── tier2-report/          # Detailed Tier 2 report
+│   └── images/                # README screenshots and figures
+├── tests/                     # 91 tests: pipeline, phantoms, metrics, Tier 2, paper statistics
 ├── app.py, tasks.py, worker.py, jobstore.py, config.py   # Web service and job handling
 ├── web/                       # Workbench and Neuroplasticity Explorer
 ├── brain_knowledge.py         # Explorer evidence base
-├── entry.py, launcher.py, medsys.spec                    # Standalone Windows build
 └── Dockerfile, Dockerfile.web, docker-compose.yml, requirements*.txt
 ```
 
 ## Roadmap
 
 **Research**
-- [x] Tier 1 phantom experiment with exact surfaces (RQ1)
+- [x] Tier 1: phantom experiment with exact surfaces
+- [x] Tier 2: 41 expert-labelled CT scans with acquisition resolution as a factor
+- [x] Scan-clustered attribution and validation of the sampling relationship
+- [x] Paper draft (IEEE conference format)
+- [ ] Second, held-out dataset: CT-ORG (liver, lungs, bone)
+- [ ] TotalSegmentator full-resolution (1.5 mm) model
 - [ ] Systematic, logged literature search to confirm novelty
-- [ ] Tier 2: public expert-annotated CT datasets, with leakage and label-bias controls
-- [ ] Formal attribution: mixed-effects models and Sobol indices
-- [ ] RQ2: reliability model with split-conformal intervals and task tolerances fixed in advance
-- [ ] RQ3: accuracy-constrained pipeline selection, with latency and energy as costs
+- [ ] RQ2: ground-truth-free error prediction with calibrated intervals
+- [ ] RQ3: accuracy-constrained pipeline selection
 
 **Platform**
 - [x] Shared, parameterised reconstruction module
-- [x] GPU inference, with measured CPU and GPU timings
+- [x] GPU inference with measured CPU and GPU timings
 - [x] Browser-side mesh checks
-- [ ] Production and research configuration profiles (parameters are still set at each call site)
-- [ ] Minimum-size thresholds in mm³ rather than voxels (the voxel cutoff is 8× stricter at 3 mm than at 1.5 mm)
+- [ ] Mesh TotalSegmentator output on its working grid (confirm on CT-ORG first)
+- [ ] Blur specified in millimetres in production
 - [ ] Verified de-identification and opaque dataset identifiers
-- [ ] Benchmark the MRI route against HD-BET and SynthStrip
 - [ ] DICOM-SEG export and a provenance record on every output
 
 ## Status
 
-A working research prototype. The platform runs end to end and its tests pass. The research is at
-the end of RQ1 Tier 1: phantom results exist, anatomy results do not. No claim here should be read
-as clinical accuracy.
+A working research prototype. The platform runs end to end and its 91 tests pass. RQ1 has results
+on phantoms and on one organ (spleen, 41 scans); a second dataset is next.
 
-### Limitations
-
-- Phantom results describe reconstruction only; they say nothing about segmentation accuracy.
-- The pilot comparison uses one scan and an algorithmic reference, not expert annotations.
-- Compute timings come from one machine and one study.
-- The novelty of RQ1 has not yet been confirmed by a systematic literature search.
+**Limitations.** Real-anatomy results cover one organ, one dataset and TotalSegmentator's fast mode.
+Coarser acquisition was simulated by resampling, not by rescanning. The reference surfaces carry
+the native scan's own sampling error, so differences below about 0.2–0.5 mm cannot be called
+anatomical error. No claim here should be read as clinical accuracy.
 
 ## Requirements
 
@@ -335,26 +330,31 @@ as clinical accuracy.
 - Optional: an NVIDIA GPU with a matching CUDA build of PyTorch (MedSAM and TotalSegmentator)
 - Optional: Docker
 
-## Contributing
-
-Issues and pull requests are welcome. Please run `pytest` before submitting, keep research and
-production on the shared reconstruction code, and never commit patient data, DICOM files, model
-checkpoints or pipeline output (`.gitignore` excludes them).
-
 ## Citation
 
 ```bibtex
-@software{medsys2026,
-  author = {Organic42},
-  title  = {MEDSYS: Risk-Aware Reconstruction of 3D Anatomy from Medical Scans},
+@misc{morya2026medsys,
+  author = {Morya, Sameer and Wage, Sarthak},
+  title  = {Stage-Wise Attribution of Geometric Error in Automatic Anatomical Surface
+            Reconstruction From Computed Tomography},
   year   = {2026},
+  note   = {MEDSYS, release v1.0-paper},
   url    = {https://github.com/Organic42/MEDSYS}
 }
 ```
 
 MEDSYS builds on TotalSegmentator (Wasserthal et al., *Radiology: Artificial Intelligence*, 2023),
-nnU-Net (Isensee et al., *Nature Methods*, 2021), MedSAM, BET, N4ITK and marching cubes; please
-cite them where you use them.
+nnU-Net (Isensee et al., *Nature Methods*, 2021), MedSAM, BET, N4ITK and marching cubes, and the
+Tier 2 data come from the Medical Segmentation Decathlon (Antonelli et al., *Nature
+Communications*, 2022); please cite them where you use them.
+
+## Authors
+
+- **Sameer Morya**
+- **Sarthak Wage** ([Organic42](https://github.com/Organic42))
+
+Issues and pull requests are welcome. Please run `pytest` before submitting, and never commit
+patient data, DICOM files, model checkpoints or pipeline output (`.gitignore` excludes them).
 
 ## Disclaimer
 
@@ -365,8 +365,5 @@ clinicians and validated clinical software.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
-
-## Contributors
-
-- **[Organic42](https://github.com/Organic42)** — project lead
+MIT. See [LICENSE](LICENSE). Tier 2 results in `research/results/` are derived from CC-BY-SA 4.0
+data and shared under that licence.
