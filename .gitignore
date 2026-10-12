@@ -45,3 +45,10 @@ mri_test.zip
 
 # Research datasets (public, but large and licence-bound: never commit or bake into images)
 data/
+
+# LaTeX build intermediates (make_docx.py reads the .aux and .bbl of a local build)
+docs/paper/*.aux
+docs/paper/*.bbl
+docs/paper/*.blg
+docs/paper/*.log
+docs/paper/*.docx

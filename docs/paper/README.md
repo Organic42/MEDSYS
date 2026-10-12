@@ -25,6 +25,12 @@ cp docs/tier2-report/figures/{assd_by_resolution,topology_by_decimation}.pdf doc
 
 # Compile (Tectonic, or pdflatex + bibtex on Overleaf)
 tectonic -X compile docs/paper/medsys-paper.tex
+
+# Word manuscript for review (single column, tracked changes). It reads the
+# citation numbers and reference list from the build, so keep the intermediates
+cd docs/paper
+tectonic -X compile --keep-intermediates medsys-paper.tex
+python make_docx.py medsys-paper.docx
 ```
 
 ## Re-run the experiments from scratch
