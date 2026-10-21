@@ -1,0 +1,20 @@
+{
+ "test": "card_validation",
+ "started": "20261020-203227",
+ "commit": "6ed708d (+ uncommitted changes)",
+ "cases": 82,
+ "sources": [
+  "ts_fast",
+  "ts_full"
+ ],
+ "levels": [
+  "native",
+  "iso1.5",
+  "iso3",
+  "slice5"
+ ],
+ "n_samples": 20000,
+ "seed": 2026,
+ "python": "3.14.4",
+ "seconds": 164
+}

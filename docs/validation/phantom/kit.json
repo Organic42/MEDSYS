@@ -1,0 +1,121 @@
+{
+ "units": "mm",
+ "objects": {
+  "sphere_r15": {
+   "shape": "Sphere",
+   "volume_mm3": 14137.17,
+   "area_mm2": 2827.43,
+   "triangles": 135464,
+   "checks": [
+    {
+     "what": "diameter",
+     "design_mm": 30.0
+    }
+   ]
+  },
+  "rounded_box": {
+   "shape": "RoundedBox",
+   "volume_mm3": 12051.49,
+   "area_mm2": 3076.25,
+   "triangles": 107704,
+   "checks": [
+    {
+     "what": "edge x",
+     "design_mm": 32.0
+    },
+    {
+     "what": "edge y",
+     "design_mm": 24.0
+    },
+    {
+     "what": "edge z",
+     "design_mm": 16.0
+    }
+   ]
+  },
+  "torus": {
+   "shape": "Torus",
+   "volume_mm3": 12791.01,
+   "area_mm2": 4263.67,
+   "triangles": 195184,
+   "checks": [
+    {
+     "what": "outer diameter",
+     "design_mm": 48.0
+    },
+    {
+     "what": "tube thickness",
+     "design_mm": 12.0
+    }
+   ]
+  },
+  "capsule_r1": {
+   "shape": "Capsule",
+   "volume_mm3": 129.85,
+   "area_mm2": 263.89,
+   "triangles": 67720,
+   "checks": [
+    {
+     "what": "diameter",
+     "design_mm": 2.0
+    },
+    {
+     "what": "length",
+     "design_mm": 42.0
+    }
+   ]
+  },
+  "capsule_r2": {
+   "shape": "Capsule",
+   "volume_mm3": 536.17,
+   "area_mm2": 552.92,
+   "triangles": 143000,
+   "checks": [
+    {
+     "what": "diameter",
+     "design_mm": 4.0
+    },
+    {
+     "what": "length",
+     "design_mm": 44.0
+    }
+   ]
+  },
+  "capsule_r3": {
+   "shape": "Capsule",
+   "volume_mm3": 1244.07,
+   "area_mm2": 867.08,
+   "triangles": 37288,
+   "checks": [
+    {
+     "what": "diameter",
+     "design_mm": 6.0
+    },
+    {
+     "what": "length",
+     "design_mm": 46.0
+    }
+   ]
+  },
+  "branch": {
+   "shape": "Branch",
+   "volume_mm3": 956.43,
+   "area_mm2": 812.27,
+   "triangles": 36116,
+   "checks": [
+    {
+     "what": "trunk diameter",
+     "design_mm": 6.0
+    },
+    {
+     "what": "branch diameter",
+     "design_mm": 4.0
+    },
+    {
+     "what": "overall length",
+     "design_mm": 35.74
+    }
+   ]
+  }
+ }
+}

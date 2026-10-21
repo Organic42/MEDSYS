@@ -99,6 +99,7 @@ The rules:
 | Dataset | Structures | Licence | Label rule |
 |---|---|---|---|
 | `msd_spleen`: Medical Segmentation Decathlon Task09 | spleen | CC-BY-SA 4.0 | expert labels in all 41 training cases |
+| `msd_pancreas`: Medical Segmentation Decathlon Task07 | pancreas | CC-BY-SA 4.0 | expert pancreas and tumour labels, merged into the organ (TotalSegmentator's pancreas includes lesions); `--sample 41` draws the paper's held-out set |
 | `ctorg`: CT-ORG (TCIA) | liver, lungs, bone | CC BY 3.0 | liver: all 140 cases; lungs and bone: **cases 0–20 only**, since the training split's lungs and bone were labelled by morphological algorithms |
 
 Datasets go in `data/`, which git and Docker ignore. TotalSegmentator was
@@ -110,24 +111,42 @@ external to it.
 python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset pilot
 python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset full
 python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset full --resolutions native
+# MSD Pancreas, the held-out organ: https://msd-for-monai.s3-us-west-2.amazonaws.com/Task07_Pancreas.tar (12.3 GB)
+python -m research.tier2 --dataset msd_pancreas --data data/msd/Task07_Pancreas --sample 41 --preset full --engines ts_fast,ts_full
+# Coarsening-model sensitivity: box slice profile and added noise at iso3 and slice5
+python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset sensitivity --engines ts_fast
 # CT-ORG: download from TCIA, then point --data at the folder holding volume-N / labels-N
 python -m research.tier2 --dataset ctorg --data data/ctorg --preset full
 ```
 
-Engines: `ts_fast` (TotalSegmentator, 3 mm) for any structure, and
-`classical` (the intensity-threshold methods in `validate.py`) for lungs and
-bone. Engine masks are cached in `output/research/tier2/cache/`, so re-runs
-skip segmentation. Each run writes `results.csv` (mask-level and mesh-level
-rows), `run.json` (dataset, licence, label rules, grid, timings, commit) and
-`summary.md`. Rows are also saved unit by unit to `partial.jsonl` while the run
-is in progress, so an interrupted run keeps its work.
+Engines: `ts_fast` (TotalSegmentator, 3 mm) and `ts_full` (TotalSegmentator
+at 1.5 mm, running only the sub-model that holds the study structures, on a
+crop found by the 3 mm model) for any structure, and `classical` (the
+intensity-threshold methods in `validate.py`) for lungs and bone. Engine masks
+are cached in `output/research/tier2/cache/`, so re-runs skip segmentation;
+`--segment-only` runs the engines and stops. Each run writes `results.csv`
+(mask-level and mesh-level rows), `run.json` (dataset, licence, label rules,
+grid, timings, commit) and `summary.md`. Rows are also saved unit by unit to
+`partial.jsonl` while the run is in progress; passing the run's folder as
+`--outdir` resumes it from the units already complete.
+
+Besides the grid and production, every mask is meshed with `production_mm`
+(production smoothing and decimation, blur 0.5 mm), which separates blur units
+from the grid. Coarsening variants are written `<level>~box` (a rectangular
+slice profile one coarse voxel wide, on the CT and the expert mask) and
+`<level>~noise` (Gaussian profile plus white noise of 20 HU on the CT). Mesh
+metrics also include NSD at 0.5 and 2 mm, the 99th percentile distance, and
+local defects: faces of the test mesh more than 2 mm from the reference, as an
+area share and the area of the largest connected patch.
 
 `paper_stats.py` adds the statistics the paper needs beyond the report:
 scan-clustered bootstrap CIs for the variance shares, a random-intercept
 variance-component estimate, leave-one-scan-out and leave-one-level-out
-validation of the sampling relationship, and a grid comparison at identical
-physical settings. The per-mesh results of the runs behind the paper are kept,
-compressed, in [`results/`](results/); see
+validation of the sampling relationship, a grid comparison at identical
+physical settings, and the held-out hypotheses of
+[`heldout_hypotheses.md`](heldout_hypotheses.md). `supplement_stats.py` writes
+the supplement's analyses (S1–S12). The per-mesh results of the runs behind the
+paper are kept, compressed, in [`results/`](results/); see
 [`docs/paper/README.md`](../docs/paper/README.md) for the full reproduction.
 
 `tier2_report.py` turns a run into the figures, LaTeX tables and
@@ -138,6 +157,60 @@ way every number in the report comes from `results.csv`:
 python -m research.tier2_report output/research/tier2/<run> --out docs/tier2-report \
        --baseline output/research/tier2/<earlier native-only run>
 ```
+
+## Validation of the application
+
+Two checks of what the app itself delivers, using the Tier 2 data. Both run
+the application's own code, not research copies of it.
+
+**Test 1, the accuracy card (`card_validation.py`).** The app's
+`build_mesh` call, with the accuracy estimate on, meshes the cached
+TotalSegmentator masks of all 82 Tier 2 scans (both modes, all four grids:
+590 meshes). Each line of the card is then checked against the delivered
+mesh's true error to the expert surface:
+
+- the resolution limit, on the coarsened expert mask with the pancreas held
+  out of the fit, and its range on the Tier 1 phantoms;
+- the smoothing shift, against the change it actually caused;
+- the engine's figure, leave one scan out: its middle half should hold about
+  half the scans and its 90% range about nine in ten;
+- the watertight flag, against VTK's own edge classification.
+
+The first run found the card's engine figure overconfident on coarse grids:
+it used the native reference everywhere, and its middle half held as few as
+15% of full-mode spleen meshes on 3 mm grids. The card now uses the study grid
+closest to the scan (`accuracy.reference_level`) and shows a 90% range. The
+summary reports both versions on the same meshes. The phantoms also showed the
+resolution range's lower bound, 0.14, sat at the isotropic median; it is now
+0.13, the phantoms' 2.5th percentile.
+
+**Test 2, repeatability (`repeatability.py`).** The same scans (5 spleen,
+5 pancreas, drawn with seed 2026) go through TotalSegmentator again and
+again, in both modes: on the app's persistent GPU worker, in a new GPU
+process each time (nnU-Net's cuDNN autotuning can choose different kernels),
+and on the CPU. Each run is compared voxel by voxel with the first, the organ
+is meshed with the app's call (twice, which must give an identical mesh), and
+the mesh is compared with the first run's and with the expert surface.
+
+```bash
+python -m research.card_validation --workers 8          # ~3 min, needs the Tier 2 engine cache
+python -m research.repeatability                        # ~2 h: GPU, then CPU runs
+python -m research.validation_figures output/research/card_validation/<run> output/research/repeatability/<run>
+```
+
+Both write `results.csv`, `run.json` and `summary.md` under
+`output/research/`; the runs reported are kept in [`results/`](results/).
+**Test 3, printed phantoms in CT (`physical_phantom.py`), ready, awaiting a
+scan.** The Tier 1 shapes plus three vessel calibres and a bifurcation, made
+physical: `design` writes the STL files and a caliper sheet, `simulate` writes
+a synthetic CT of the kit as DICOM to test the analysis, and `analyse` scores
+the app's meshes of each scanned object against its exact surface after a
+rigid fit. The print and scan protocol is in
+[`docs/validation/phantom/`](../docs/validation/phantom/README.md).
+
+`docs/validation/make_report.py --pdf` writes the validation report from those
+runs, and `docs/validation/make_slides.py` refreshes the validation slides in
+`MEDSYS-presentation.html`; every number in both comes from the runs.
 
 ## Tests
 

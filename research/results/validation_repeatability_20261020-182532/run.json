@@ -1,0 +1,29 @@
+{
+ "test": "repeatability",
+ "started": "20261020-182532",
+ "cases": [
+  "spleen_3",
+  "spleen_12",
+  "spleen_21",
+  "spleen_38",
+  "spleen_47",
+  "pancreas_158",
+  "pancreas_309",
+  "pancreas_316",
+  "pancreas_321",
+  "pancreas_385"
+ ],
+ "worker_runs": 5,
+ "fresh_runs": 3,
+ "cpu_runs": 2,
+ "full_cpu_cases": [
+  "pancreas_158",
+  "spleen_3"
+ ],
+ "seed": 2026,
+ "python": "3.14.4",
+ "gpu": "NVIDIA GeForce RTX 5080",
+ "torch": "2.12.0+cu130",
+ "totalsegmentator": "?",
+ "seconds": 7494
+}
