@@ -65,6 +65,33 @@
     background:#0B1220;color:#C7D2E0;font-size:15px;line-height:1.55;padding:18px 26px;
     border-top:1px solid #22304A;display:none;white-space:pre-wrap}
   #notesbox.on{display:block}
+  /* validation slides */
+  .chip{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:1px;padding:5px 12px;
+    border-radius:8px;align-self:flex-start;text-transform:uppercase}
+  .chip.done{background:#E3F4F5;color:#006E78}
+  .chip.next{background:#FDEBDD;color:#A3420A}
+  .dark .chip.done{background:#0E3B40;color:#7FE3EA}
+  .dark .chip.next{background:#3A2A1E;color:#FDBA8C}
+  .acard{background:var(--white);border:1px solid var(--line);border-radius:18px;padding:30px;
+    display:flex;flex-direction:column;gap:14px}
+  .arow2{border:1px solid var(--line);border-radius:12px;padding:16px 20px;display:flex;flex-direction:column;gap:6px}
+  .arow2 .spread h3{font-size:25px}
+  .arow2 .spread span{font-family:var(--mono);font-size:25px;font-weight:700;color:var(--ink)}
+  .arow2 p{font-size:20px;line-height:1.35}
+  .drow{display:flex;align-items:center;gap:18px;height:33px}
+  .dl{width:330px;font-size:21px;color:#AEBACB;text-align:right;white-space:nowrap}
+  .dt{position:relative;flex:1;height:33px;border-bottom:1px solid #22304A}
+  .dt .tgt{position:absolute;top:-4px;bottom:-4px;border-left:2px dashed #7C8798}
+  .dt .seg{position:absolute;top:14px;height:4px;background:#3A4A64;border-radius:2px}
+  .dt b{position:absolute;top:7px;width:19px;height:19px;margin-left:-9.5px;border-radius:50%;border:2px solid var(--ink)}
+  .dt b.v1{background:#E0590A} .dt b.v2{background:#008C99}
+  .dv{width:140px;font-family:var(--mono);font-size:20px;color:#E8EDF3;white-space:nowrap}
+  table.tight td{padding:10px 18px} table.tight th{padding:12px 18px}
+  table.tighter td{padding:8px 12px;white-space:nowrap} table.tighter th{padding:10px 12px}
+  .key{display:flex;gap:34px;font-size:22px;color:#AEBACB;align-items:center}
+  .key i{display:inline-block;width:18px;height:18px;border-radius:50%;margin-right:10px;vertical-align:-2px}
+  .lbar{width:100%;height:28px;background:#E3E8EE;border-radius:10px;overflow:hidden}
+  .lbar > i{display:block;height:100%;border-radius:10px;min-width:6px}
 </style>
 </head>
 <body>
@@ -76,11 +103,11 @@
   <p style="font-size:46px;font-weight:300;color:#AEBACB;max-width:1500px;line-height:1.3">From raw DICOM to explorable 3D anatomy — with the segmentation engine chosen by measurement, not assumption.</p>
   <hr>
   <div style="display:flex;gap:110px">
-    <div><p style="font-size:24px;color:#7C8798;letter-spacing:2px;text-transform:uppercase">Candidate</p><p style="font-size:32px;color:#E8EDF3">[Your Name] · [Roll No.]</p></div>
+    <div><p style="font-size:24px;color:#7C8798;letter-spacing:2px;text-transform:uppercase">Team</p><p style="font-size:32px;color:#E8EDF3">Sameer Morya · Sarthak Wage</p></div>
     <div><p style="font-size:24px;color:#7C8798;letter-spacing:2px;text-transform:uppercase">Supervisor</p><p style="font-size:32px;color:#E8EDF3">[Supervisor Name]</p></div>
-    <div><p style="font-size:24px;color:#7C8798;letter-spacing:2px;text-transform:uppercase">Department</p><p style="font-size:32px;color:#E8EDF3">[Department], [University]</p></div>
+    <div><p style="font-size:24px;color:#7C8798;letter-spacing:2px;text-transform:uppercase">Institution</p><p style="font-size:32px;color:#E8EDF3">K J Somaiya School of Engineering, Mumbai</p></div>
   </div>
-  <aside hidden>Open on the thesis, not the tool. "This project turns clinical scans into 3D anatomy in a browser — but what I want to defend today is a measurement." Twenty seconds, then move. Fill in the bracketed fields first.</aside>
+  <aside hidden>Open on the thesis, not the tool. "This project turns clinical scans into 3D anatomy in a browser — but what I want to defend today is a measurement." Twenty seconds, then move. Fill in the supervisor's name first.</aside>
 </section>
 
 <section class="slide" style="gap:52px">
@@ -213,8 +240,8 @@
   <p class="eyebrow">Implementation</p>
   <h2>Built to run somewhere other than my laptop</h2>
   <div class="row" style="gap:24px">
-    <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">1.8k</span><p style="font-size:25px">lines of Python across ten modules</p></div>
-    <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">16/16</span><p style="font-size:25px">unit tests passing, CI on every push</p></div>
+    <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">7.4k</span><p style="font-size:25px">lines of Python: 2.9k in the app, 4.5k in the research code</p></div>
+    <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">118/118</span><p style="font-size:25px">automated tests passing, CI on every push</p></div>
     <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">3</span><p style="font-size:25px">distribution paths from one codebase</p></div>
     <div class="card" style="border:none;padding:34px;gap:8px"><span class="stat">0</span><p style="font-size:25px">manual steps between upload and mesh</p></div>
   </div>
@@ -289,16 +316,197 @@
   <aside hidden>This converts a number into understanding. Deliver cleanly: a threshold isn't an approximation for lungs, it's exactly correct; for bone no cut-off exists at all. "How would you improve the classical bone result?" — you can't with thresholding; it needs shape priors.</aside>
 </section>
 
+<!-- validation slides: start -->
+<section class="slide dark" style="gap:40px">
+  <p class="eyebrow">Validation</p>
+  <h2 style="font-size:64px;max-width:1600px">Is the 3D model accurate — and does the app tell the truth about it?</h2>
+  <div class="grid2" style="gap:22px">
+    <div class="step dark" style="border:1px solid #2A3A52"><span class="num" style="color:var(--cyan)">01</span><div style="display:flex;flex-direction:column;gap:10px"><h3>Same input, same model</h3><p>Each scan segmented again and again, on GPU and CPU; meshing checked for identical output.</p><span class="chip done">Done · Test 2</span></div></div>
+    <div class="step dark" style="border:1px solid #2A3A52"><span class="num" style="color:var(--cyan)">02</span><div style="display:flex;flex-direction:column;gap:10px"><h3>Close to the truth</h3><p>Exact digital phantoms and 82 CT scans outlined by experts.</p><span class="chip done">Done · research paper</span></div></div>
+    <div class="step dark" style="border:1px solid #2A3A52"><span class="num" style="color:var(--cyan)">03</span><div style="display:flex;flex-direction:column;gap:10px"><h3>An honest accuracy estimate</h3><p>Every line of the in-app accuracy card checked on 590 meshes.</p><span class="chip done">Done · Test 1</span></div></div>
+    <div class="step dark" style="border:1px solid #2A3A52"><span class="num" style="color:var(--cyan)">04</span><div style="display:flex;flex-direction:column;gap:10px"><h3>Real objects, real experts</h3><p>Printed phantoms in a CT scanner, expert agreement, a surgeon reader study.</p><span class="chip next">Planned</span></div></div>
+  </div>
+  <p class="foot">Verification → accuracy against truth → calibration → clinical validation</p>
+  <aside hidden>Frame the section with four questions and say which are answered. This follows the standard structure for validating digital health tools: verification (does the software do the same thing every time), analytical validation (is it close to the truth), calibration (is the number we show honest), clinical validation (does it help real users). Three are done with data; the fourth needs a CT scanner, a radiologist and ethics approval, and is the plan for the next weeks.</aside>
+</section>
+
+<section class="slide" style="background:var(--alt);gap:30px">
+  <p class="eyebrow">Validation — accuracy against truth</p>
+  <h2>Measured against experts, not another algorithm</h2>
+  <div class="row" style="gap:26px">
+    <div class="card" style="border:none;gap:10px;padding:28px 34px"><p class="mono" style="font-size:22px;color:var(--muted)">TIER 1 · EXACT SURFACES</p><span class="stat" style="font-size:54px">0.14 × voxel</span><p style="font-size:24px">The raw surface straight from the voxels, before smoothing. Four digital phantoms whose true surface is known exactly; 7,760 meshes.</p></div>
+    <div class="card" style="border:none;gap:10px;padding:28px 34px"><p class="mono" style="font-size:22px;color:var(--muted)">TIER 2 · EXPERT-LABELLED CT</p><span class="stat" style="font-size:54px">82 scans</span><p style="font-size:24px">41 spleen and 41 pancreas CT scans outlined by experts (Medical Segmentation Decathlon); 49,200 meshes. The pancreas was held out: of six predictions fixed in advance, four held and one partly.</p></div>
+  </div>
+  <table class="tight" style="font-size:24px">
+    <tr><th style="width:24%">Organ</th><th style="width:22%">Engine mode</th><th style="width:27%;text-align:right">Segmentation error</th><th style="width:27%;text-align:right">Middle half of scans</th></tr>
+      <tr><td class="k">Spleen</td><td>fast</td><td class="mono" style="text-align:right">0.85&#8239;mm</td><td class="mono" style="text-align:right">0.81–0.94&#8239;mm</td></tr>
+      <tr><td class="k">Spleen</td><td>full</td><td class="mono" style="text-align:right">0.70&#8239;mm</td><td class="mono" style="text-align:right">0.63–0.80&#8239;mm</td></tr>
+      <tr><td class="k">Pancreas</td><td>fast</td><td class="mono" style="text-align:right">1.88&#8239;mm</td><td class="mono" style="text-align:right">1.53–2.55&#8239;mm</td></tr>
+      <tr><td class="k">Pancreas</td><td>full</td><td class="mono" style="text-align:right">1.87&#8239;mm</td><td class="mono" style="text-align:right">1.48–3.20&#8239;mm</td></tr>
+  </table>
+  <p class="foot">Average distance from the expert's outline (ASSD) of the raw segmentation surface, the figure the app's card shows · the finished model: next slide</p>
+  <aside hidden>This answers the limitation in the earlier version of this project: the reference is now experts, not another algorithm, and the sample is 82 scans, not one. The pancreas is the stronger evidence, because we wrote down six predictions before processing it. Be ready for "why is the pancreas worse?": it is thin and irregular, and many of these scans contain tumours that the engine misses.</aside>
+</section>
+
+<section class="slide" style="gap:28px;padding-top:112px">
+  <p class="eyebrow">Validation — accuracy summary</p>
+  <h2>How accurate is the 3D model?</h2>
+  <div class="row" style="gap:24px;align-items:stretch">
+    <div class="card" style="gap:12px;padding:28px 30px;flex:0.92">
+      <p class="mono" style="font-size:19px;color:var(--teal);letter-spacing:2px">1 · AGAINST THE SCAN'S VOXELS</p>
+      <span class="stat" style="font-size:52px">≈ 0.1 voxel</span>
+      <p style="font-size:23px">The meshing step alone, on digital shapes whose true surface is exact.</p>
+      <table class="tighter" style="font-size:22px">
+          <tr><th>Voxel size</th><th style="text-align:right">Surface error</th></tr>
+          <tr><td class="k">0.5 mm</td><td class="mono" style="text-align:right">0.03&#8239;mm</td></tr>
+          <tr><td class="k">1 mm</td><td class="mono" style="text-align:right">0.08&#8239;mm</td></tr>
+          <tr><td class="k">2 mm</td><td class="mono" style="text-align:right">0.25&#8239;mm</td></tr>
+          <tr><td class="k">0.8 × 0.8 × 5 mm</td><td class="mono" style="text-align:right">0.44&#8239;mm</td></tr>
+      </table>
+      <p style="font-size:21px;color:var(--muted)">Smoothing shrinks the volume by 0.3–5.9%.</p>
+    </div>
+    <div class="card hl" style="gap:12px;padding:28px 30px;flex:1.3">
+      <p class="mono" style="font-size:19px;color:var(--teal);letter-spacing:2px">2 · AGAINST AN EXPERT'S OUTLINE</p>
+      <span class="stat" style="font-size:52px">0.76–0.90&#8239;mm</span>
+      <p style="font-size:23px">The finished spleen model on 82 CT scans: about one CT pixel from where the expert drew it.</p>
+      <table class="tighter" style="font-size:22px">
+          <tr><th></th><th style="text-align:right">Spleen</th><th style="text-align:right">Pancreas</th></tr>
+          <tr><td class="k">Average distance</td><td class="mono" style="text-align:right">0.76–0.90&#8239;mm</td><td class="mono" style="text-align:right">2.0&#8239;mm</td></tr>
+          <tr><td class="k">95% of surface within</td><td class="mono" style="text-align:right">2.2–2.6&#8239;mm</td><td class="mono" style="text-align:right">7–8&#8239;mm</td></tr>
+          <tr><td class="k">Volume difference</td><td class="mono" style="text-align:right">2%</td><td class="mono" style="text-align:right">23–25%</td></tr>
+          <tr><td class="k">Overlap (Dice)</td><td class="mono" style="text-align:right">0.94–0.96</td><td class="mono" style="text-align:right">0.78–0.79</td></tr>
+      </table>
+      <p style="font-size:21px;color:var(--muted)">Pancreas: experts included tumours that the engine mostly misses.</p>
+    </div>
+    <div class="card" style="gap:12px;padding:28px 30px;border:2px dashed var(--warn);flex:0.92">
+      <p class="mono" style="font-size:19px;color:var(--warn);letter-spacing:2px">3 · AGAINST THE REAL ORGAN</p>
+      <span class="stat" style="font-size:44px;color:var(--warn)">Not yet measured</span>
+      <p style="font-size:23px">The CT is the only record of the organ, so this needs a physical test.</p>
+      <p style="font-size:23px"><b>Can't beat the scan:</b> at least 0.18&#8239;mm on a 1&#8239;mm scan, 0.5&#8239;mm on 5&#8239;mm slices.</p>
+      <p style="font-size:23px"><b>The reference isn't perfect:</b> expert outlines carry 0.2–0.5&#8239;mm of their own error.</p>
+      <p style="font-size:23px"><b>Next:</b> printed shapes of known size, scanned in a real CT (slide 21).</p>
+    </div>
+  </div>
+  <p class="foot">Against experts, a spleen model sits within 0.76–0.90&#8239;mm on average; meshing adds about a tenth of a voxel</p>
+  <aside hidden>Answer "how accurate is it?" with three comparisons, because they are different questions. First, the meshing step: on exact digital shapes it costs about a tenth of a voxel. Second, the finished model against what an expert drew on the same CT: under 1 mm on average for the spleen, about one pixel; about 2 mm for the pancreas, mostly tumours the engine misses. Third, against the real organ: not measured, and it cannot be measured from scans alone. It can't be better than the scan's resolution, and the expert reference has its own 0.2 to 0.5 mm error. The printed-phantom test is how we will answer it, and CT scanner time is where the mentor can help.</aside>
+</section>
+
+<section class="slide" style="gap:36px">
+  <p class="eyebrow">Validation — test 1</p>
+  <h2>Is the accuracy estimate in the app honest?</h2>
+  <div class="row" style="gap:30px;align-items:flex-start">
+    <div style="width:560px;display:flex;flex-direction:column;gap:12px">
+      <div class="acard">
+        <p class="mono" style="font-size:20px;color:var(--teal);letter-spacing:3px">ACCURACY ESTIMATE · SPLEEN</p>
+        <div class="arow2"><div class="spread"><h3>Resolution limit</h3><span>≈ 0.53&#8239;mm</span></div><p>0.39–0.62&#8239;mm from the voxel spacing alone</p></div>
+        <div class="arow2"><div class="spread"><h3>Smoothing</h3><span>0.31&#8239;mm</span></div><p>How far smoothing moved the mesh</p></div>
+        <div class="arow2"><div class="spread"><h3>Segmentation</h3><span>≈ 0.94&#8239;mm</span></div><p>9 in 10 scans 0.75–1.29&#8239;mm</p></div>
+        <div class="arow2"><div class="spread"><h3>Watertight</h3><span>no</span></div></div>
+      </div>
+      <p style="font-size:21px;color:var(--muted)">What a user sees: spleen, 5&#8239;mm slices</p>
+    </div>
+    <table style="font-size:25px;flex:1">
+      <tr><th style="width:27%">Card line</th><th style="width:41%">How it was checked</th><th style="width:32%;text-align:right">Result</th></tr>
+      <tr><td class="k">Resolution limit</td><td>Pancreas, held out of the fit: coarsened expert outlines</td><td class="mono" style="text-align:right;color:var(--teal)">98% inside ±0.111&#8239;mm</td></tr>
+      <tr><td class="k">"At least this much"</td><td>True error of every delivered mesh</td><td class="mono" style="text-align:right;color:var(--teal)">100% of 590</td></tr>
+      <tr><td class="k">Smoothing</td><td>Against the change it really caused</td><td class="mono" style="text-align:right;color:var(--teal)">within 0.022&#8239;mm</td></tr>
+      <tr><td class="k">Watertight</td><td>Against VTK's own edge check</td><td class="mono" style="text-align:right;color:var(--teal)">590 of 590 agree</td></tr>
+      <tr><td class="k">Segmentation</td><td>Leave one scan out</td><td class="mono" style="text-align:right;color:var(--warn)">next slide &#8594;</td></tr>
+    </table>
+  </div>
+  <p class="foot">The app's own meshing code · 82 expert-labelled CT scans · 2 engine modes × 4 resolutions · 590 meshes</p>
+  <aside hidden>The point of this test: the app shows users an accuracy estimate, so we must prove the estimate itself. We ran the app's real meshing code, not a research copy, on all 82 scans and compared each line of the card with the true error against the experts. Mean miss on the held-out organ: 0.029 mm. Four lines pass cleanly; the fifth is the interesting one.</aside>
+</section>
+
+<section class="slide dark" style="gap:28px;padding-top:110px">
+  <p class="eyebrow">Validation — test 1 found a flaw</p>
+  <h2 style="font-size:56px;max-width:1660px">On coarse scans the card was overconfident. Fixed, then re&#8209;tested on the same 590 meshes.</h2>
+  <div class="row" style="gap:46px;align-items:flex-start">
+    <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+      <div class="key" style="margin:0 0 10px 348px"><span><i style="background:#E0590A"></i>As first shipped</span><span><i style="background:#008C99"></i>Fixed: matched to the scan's resolution</span><span style="color:#7C8798">┆ target 50%</span></div>
+      <div class="drow"><span class="dl">Spleen · fast · native</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:48.8%;width:7.3%"></i><b class="v1" style="left:48.8%"></b><b class="v2" style="left:56.1%"></b></div><span class="dv">49 → 56%</span></div>
+      <div class="drow"><span class="dl">Spleen · fast · 1.5 mm</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:43.9%;width:0.0%"></i><b class="v1" style="left:43.9%"></b><b class="v2" style="left:43.9%"></b></div><span class="dv">44%</span></div>
+      <div class="drow"><span class="dl">Spleen · fast · 3 mm</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:36.6%;width:9.8%"></i><b class="v1" style="left:36.6%"></b><b class="v2" style="left:46.3%"></b></div><span class="dv">37 → 46%</span></div>
+      <div class="drow"><span class="dl">Spleen · fast · 5 mm slices</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:42.9%;width:7.1%"></i><b class="v1" style="left:42.9%"></b><b class="v2" style="left:50.0%"></b></div><span class="dv">43 → 50%</span></div>
+      <div class="drow"><span class="dl">Spleen · full · native</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:61.0%;width:2.4%"></i><b class="v1" style="left:61.0%"></b><b class="v2" style="left:63.4%"></b></div><span class="dv">61 → 63%</span></div>
+      <div class="drow"><span class="dl">Spleen · full · 1.5 mm</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:53.7%;width:0.0%"></i><b class="v1" style="left:53.7%"></b><b class="v2" style="left:53.7%"></b></div><span class="dv">54%</span></div>
+      <div class="drow"><span class="dl">Spleen · full · 3 mm</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:14.6%;width:31.7%"></i><b class="v1" style="left:14.6%"></b><b class="v2" style="left:46.3%"></b></div><span class="dv">15 → 46%</span></div>
+      <div class="drow"><span class="dl">Spleen · full · 5 mm slices</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:35.7%;width:14.3%"></i><b class="v1" style="left:35.7%"></b><b class="v2" style="left:50.0%"></b></div><span class="dv">36 → 50%</span></div>
+      <div class="drow"><span class="dl">Pancreas · fast · native</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:46.3%;width:0.0%"></i><b class="v1" style="left:46.3%"></b><b class="v2" style="left:46.3%"></b></div><span class="dv">46%</span></div>
+      <div class="drow"><span class="dl">Pancreas · fast · 1.5 mm</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:46.3%;width:2.4%"></i><b class="v1" style="left:48.8%"></b><b class="v2" style="left:46.3%"></b></div><span class="dv">49 → 46%</span></div>
+      <div class="drow"><span class="dl">Pancreas · fast · 3 mm</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:48.8%;width:0.0%"></i><b class="v1" style="left:48.8%"></b><b class="v2" style="left:48.8%"></b></div><span class="dv">49%</span></div>
+      <div class="drow"><span class="dl">Pancreas · fast · 5 mm slices</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:51.4%;width:2.9%"></i><b class="v1" style="left:54.3%"></b><b class="v2" style="left:51.4%"></b></div><span class="dv">54 → 51%</span></div>
+      <div class="drow"><span class="dl">Pancreas · full · native</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:48.8%;width:0.0%"></i><b class="v1" style="left:48.8%"></b><b class="v2" style="left:48.8%"></b></div><span class="dv">49%</span></div>
+      <div class="drow"><span class="dl">Pancreas · full · 1.5 mm</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:51.2%;width:0.0%"></i><b class="v1" style="left:51.2%"></b><b class="v2" style="left:51.2%"></b></div><span class="dv">51%</span></div>
+      <div class="drow"><span class="dl">Pancreas · full · 3 mm</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:48.8%;width:0.0%"></i><b class="v1" style="left:48.8%"></b><b class="v2" style="left:48.8%"></b></div><span class="dv">49%</span></div>
+      <div class="drow"><span class="dl">Pancreas · full · 5 mm slices</span><div class="dt"><i class="tgt" style="left:50%"></i><i class="seg" style="left:45.7%;width:5.7%"></i><b class="v1" style="left:45.7%"></b><b class="v2" style="left:51.4%"></b></div><span class="dv">46 → 51%</span></div>
+      <div style="display:flex;margin-left:348px;margin-right:158px;justify-content:space-between;font-family:var(--mono);font-size:18px;color:#7C8798;padding-top:6px"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+      <p style="margin-left:348px;font-size:20px;color:#7C8798">Share of scans whose true error fell inside the card's "middle half"</p>
+    </div>
+    <div style="width:430px;display:flex;flex-direction:column;gap:26px">
+      <div><span class="mono" style="font-size:76px;font-weight:700;color:#E8EDF3;line-height:1">15% <span style="color:#7C8798">→</span> <span style="color:#7FE3EA">46%</span></span><p style="font-size:23px;margin-top:12px">Worst case before the fix: spleen, full mode, 3 mm voxels. Should be 50%.</p></div>
+      <hr>
+      <div><span class="mono" style="font-size:54px;font-weight:700;color:#7FE3EA;line-height:1">50% · 86%</span><p style="font-size:23px;margin-top:12px">All meshes after the fix: inside the middle half (target 50%) and the 9-in-10 range (target 90%). Before: 46% and 82%.</p></div>
+    </div>
+  </div>
+  <aside hidden>The best slide in the validation section, because it shows the method working. The card compared every scan with figures measured at the scans' own resolution. On coarse scans, especially full mode at 3 mm, the true error is higher, so the card claimed more confidence than it had: only 15% of those scans fell in its middle half instead of 50%. We now pick the reference measured at the grid closest to the scan and also show a 9-in-10 range. Re-tested leave-one-scan-out on the same meshes. Say plainly: a validation that never fails anything is not testing much.</aside>
+</section>
+
+<section class="slide" style="gap:28px">
+  <p class="eyebrow">Validation — test 2</p>
+  <h2>Same scan, run again: is it the same model?</h2>
+  <div class="row" style="gap:24px">
+    <div class="card hl" style="padding:26px 32px;gap:8px"><span class="stat" style="font-size:54px">0 voxels</span><p style="font-size:24px">changed in 80 repeated runs on the app's GPU worker, the default path. Identical every time.</p></div>
+    <div class="card" style="padding:26px 32px;gap:8px"><span class="stat" style="font-size:54px">≤ 0.017&#8239;mm</span><p style="font-size:24px">mesh shift in a new GPU process (60 runs), where the engine re-tunes its GPU kernels.</p></div>
+    <div class="card" style="padding:26px 32px;gap:8px"><span class="stat" style="font-size:54px">≤ 0.025&#8239;mm</span><p style="font-size:24px">mesh shift on the CPU instead of the GPU (24 runs).</p></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <p class="mono" style="font-size:22px;color:var(--muted);letter-spacing:3px">HOW BIG IS THAT, NEXT TO THE ERROR ITSELF?</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="spread"><h3 style="font-size:24px">Largest run-to-run shift</h3><span class="mono" style="font-size:26px;font-weight:700;color:var(--ink)">0.025&#8239;mm</span></div>
+        <div class="lbar"><i style="width:1.26%;background:#E0590A"></i></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="spread"><h3 style="font-size:24px">Resolution limit of a 1 mm scan</h3><span class="mono" style="font-size:26px;font-weight:700;color:var(--ink)">0.18&#8239;mm</span></div>
+        <div class="lbar"><i style="width:8.85%;background:#008C99"></i></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="spread"><h3 style="font-size:24px">Typical error, spleen</h3><span class="mono" style="font-size:26px;font-weight:700;color:var(--ink)">0.85&#8239;mm</span></div>
+        <div class="lbar"><i style="width:42.70%;background:#008C99"></i></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="spread"><h3 style="font-size:24px">Typical error, pancreas</h3><span class="mono" style="font-size:26px;font-weight:700;color:var(--ink)">1.88&#8239;mm</span></div>
+        <div class="lbar"><i style="width:94.05%;background:#008C99"></i></div>
+      </div>
+  </div>
+  <p class="foot">10 CT scans · TotalSegmentator fast and full · 184 segmentation runs · meshing the same segmentation twice: identical for 590 of 590 meshes</p>
+  <aside hidden>Repeatability is the floor of any accuracy claim: if the same scan gave different models, no error figure would mean anything. On the app's default path, the persistent GPU worker, nothing changed at all. In a fresh process or on the CPU up to 96 voxels at the organ's edge flip, which moves the surface by hundredths of a millimetre, a small fraction of the error we report. The meshing step itself is deterministic.</aside>
+</section>
+
+<section class="slide" style="background:var(--alt);gap:40px">
+  <p class="eyebrow">Validation — next</p>
+  <h2>What is still to prove, and what each test will show</h2>
+  <div class="grid2">
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:34px;gap:12px"><h3>A real object in a real scanner</h3><p style="font-size:24px">3D-print shapes of known size, CT them at 0.6–5&#8239;mm slices, compare the model with the CAD file.</p><span class="chip next">Needs CT scanner time</span></div>
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:34px;gap:12px"><h3>More organs, other hospitals</h3><p style="font-size:24px">Liver, kidneys, bone and MRI from multi-centre public data, checked for overlap with the engine's training data.</p><span class="chip next">Needs GPU time only</span></div>
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:34px;gap:12px"><h3>As close as two experts?</h3><p style="font-size:24px">Two or three people outline the same scans. Is MEDSYS as close to an expert as the experts are to each other?</p><span class="chip next">Needs radiologist time</span></div>
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:34px;gap:12px"><h3>Useful to surgeons?</h3><p style="font-size:24px">Surgeons rate models and time their use; a standard usability score.</p><span class="chip next">Needs ethics approval</span></div>
+  </div>
+  <p class="foot">Pass/fail thresholds are written down before each test runs, as they were for the held-out pancreas</p>
+  <aside hidden>End the section on a plan, not an apology. Each card says what it would prove and what it needs from outside the team: this is where the mentor can help, especially CT scanner time and a radiologist. Phantoms and public data need no ethics approval; any hospital scans would.</aside>
+</section>
+<!-- validation slides: end -->
+
 <section class="slide" style="background:var(--alt);gap:44px">
   <p class="eyebrow" style="color:var(--warn)">Limitations</p>
   <h2>What this project does not establish</h2>
   <div class="grid2">
-    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>No expert ground truth</h3><p style="font-size:25px">The reference is another algorithm, not a radiologist. This measures <i>agreement</i> between engines, not accuracy against truth.</p></div>
-    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>A sample of one</h3><p style="font-size:25px">One chest volume. A clear demonstration of a mechanism, but no statistical power.</p></div>
-    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>Coarse slice spacing</h3><p style="font-size:25px">At 5 mm, partial-volume voxels inflate boundary tissues — visible in the elevated brain total.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>The engine comparison is agreement</h3><p style="font-size:25px">The classical-versus-deep-learning result scores one engine against the other, on one chest CT. The expert-labelled accuracy (slides 16–19) covers the deep-learning engine only.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>Two organs validated</h3><p style="font-size:25px">Accuracy against experts exists for the spleen and pancreas. The app marks every other structure "not validated" rather than guess.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>No real-world test yet</h3><p style="font-size:25px">No printed phantom in a real scanner, no other hospitals, no expert-agreement or surgeon study (slide 21).</p></div>
     <div class="card" style="border:none;border-left:6px solid var(--warn);border-radius:14px;padding:36px"><h3>Not a medical device</h3><p style="font-size:25px">No regulatory clearance, no clinical validation. Educational and research use only.</p></div>
   </div>
-  <aside hidden>Never apologise here. "Here is precisely what my result does not prove" — deliver all four flatly. Disclosing first turns a weakness into evidence of judgement.</aside>
+  <aside hidden>Never apologise here. "Here is precisely what my result does not prove" — deliver all four flatly. Disclosing first turns a weakness into evidence of judgement. The first card matters most: the engine comparison is still agreement on one scan, while the expert validation covers the deep-learning engine on two organs.</aside>
 </section>
 
 <section class="slide" style="gap:40px">
@@ -322,8 +530,8 @@
   <p class="eyebrow">Future work</p>
   <h2>The limitations are the roadmap</h2>
   <div class="grid2">
-    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Validate against ground truth</h3><p style="font-size:25px">Score both engines on a public expert-annotated dataset, turning agreement into genuine accuracy.</p></div>
-    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Widen the sample</h3><p style="font-size:25px">Repeat across many volumes and report a distribution rather than a single pair of numbers.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Score the engine comparison against experts</h3><p style="font-size:25px">Repeat the classical-versus-deep-learning comparison on expert-labelled lungs and bone (CT-ORG), turning agreement into accuracy.</p></div>
+    <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Physical and clinical validation</h3><p style="font-size:25px">Printed phantoms in a CT scanner, more organs and hospitals, expert agreement and a surgeon study (slide 21).</p></div>
     <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Atlas priors for MRI</h3><p style="font-size:25px">Correct tissue classification on non-standard contrasts where intensity clustering is unreliable.</p></div>
     <div class="card" style="border:none;border-left:6px solid var(--teal);border-radius:14px;padding:36px"><h3>Export to VR</h3><p style="font-size:25px">Emit scenes directly for headset review — the original motivation behind the project's working name.</p></div>
   </div>

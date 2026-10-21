@@ -65,8 +65,8 @@ Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segment
 |---|---|
 | **Modalities** | CT, MRI (brain) and PET, routed automatically from DICOM metadata |
 | **Engines** | A fast classical engine (intensity thresholds, BET, Gaussian mixture) and TotalSegmentator (nnU-Net) for 100+ labelled structures, with MedSAM refinement for MRI |
-| **Workbench** | Dataset, structures and pipeline on the left; a 3D stage with surface, wireframe and X-ray modes in the centre; mesh checks, the reliability estimate and reference metrics on the right |
-| **Measured, not guessed** | Mesh checks show real structural data (on the CT above: 46 of 79 meshes closed, 43 of 79 in one piece, 58 of 79 manifold, 817,158 triangles). The reliability estimate stays empty until the research supports it, rather than showing invented numbers |
+| **Workbench** | Dataset, structures and pipeline on the left; a 3D stage with surface, wireframe and X-ray modes in the centre; mesh checks, the accuracy estimate and reference metrics on the right |
+| **Measured, not guessed** | Mesh checks show real structural data (on the CT above: 46 of 79 meshes closed, 43 of 79 in one piece, 58 of 79 manifold, 817,158 triangles). The accuracy estimate gives every mesh the error its voxel spacing alone imposes, measures how far smoothing and simplification moved it, and shows the engine's error against expert labels where the study measured it (TotalSegmentator on spleen and pancreas), saying "not validated" everywhere else. Each line was checked against the true error of 590 of the app's own meshes ([validation report](docs/validation/validation-report.pdf)) |
 | **Neuroplasticity Explorer** | Questions about behaviour and the brain, answered from a curated evidence base and mapped onto a 3D brain |
 | **Deployment** | Docker Compose (API, Redis and workers), a lightweight Hugging Face Spaces image, and a standalone Windows build |
 
@@ -168,6 +168,18 @@ One 192-slice 1 mm brain MRI on an RTX 5080 (16 GB) and a 6-core CPU, PyTorch 2.
 | TotalSegmentator MRI, full (1.5 mm) | 60.2 s | 38.7 s warm | 1.6× |
 
 On CT, TotalSegmentator fast mode took 17–30 s per scan on the GPU across the 96 Tier 2 runs.
+Most of that was not inference: each job started a new process that reloaded PyTorch and the
+model, and on Windows nnU-Net and TotalSegmentator spawn helper processes that do the same.
+The app now keeps a **persistent GPU worker** (`gpu_worker.py`) with the models loaded, which
+runs that work in-process. On a 64-slice chest CT:
+
+| Stage | Per-job process | Persistent GPU worker |
+|---|---|---|
+| TotalSegmentator CT, fast (3 mm) | 28.7 s | 5.3 s (5.4×) |
+| Whole job, 79 structures meshed | 75 s | 52 s |
+
+The masks match TotalSegmentator's own output to within its run-to-run variation (nnU-Net uses
+cuDNN autotuning, so two processes can differ in a few hundred of 2.3 million voxels).
 
 ## Paper
 
@@ -196,7 +208,7 @@ python -m research.phantom_experiment --preset full      # 7,760 meshes, about 3
 python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset full --workers 5
 
 # Tests
-pytest                                                   # 91 tests
+pytest                                                   # 118 tests
 ```
 
 Full commands, software versions and a map from each paper item to its source:
@@ -220,11 +232,21 @@ python segmentation_pipeline.py --input <dicom_dir> --name <dataset> --engine to
 
 - **Hugging Face Spaces:** `Dockerfile.web` with `requirements-web.txt` builds a CPU-only image
   without PyTorch or TotalSegmentator; the front matter at the top of this file configures the
-  Space. The UI detects missing engines through `/api/capabilities`.
+  Space. The UI detects missing engines through `/api/capabilities`. The image runs in **public
+  demo mode** (`publicdemo.py`): each visitor sees only their own scans plus a preloaded sample
+  chest CT, uploaded DICOMs are deleted as soon as a job finishes and results after an hour,
+  uploads are capped at 200 MB and three jobs at a time, and a banner asks for anonymised or
+  public scans only. Publish with `hf auth login`, then
+  `python deploy/hf_space.py <username>/<space-name>`.
 - **Windows:** `python -m PyInstaller medsys.spec --noconfirm` produces `dist/MEDSYS/`, which runs
   without Python.
 - **GPU:** install a CUDA build of PyTorch that supports your card. RTX 50-series cards need
-  CUDA 12.8 or newer. Jobs fall back to the CPU when no GPU is found.
+  CUDA 12.8 or newer. Jobs fall back to the CPU when no GPU is found. With a GPU, `app.py` (or
+  `worker.py` under Redis) starts the persistent GPU worker, which keeps TotalSegmentator and
+  MedSAM loaded between jobs; `/api/capabilities` reports it as `gpu_worker: warm`. If it is
+  not running or a request fails, the job runs the step in its own process as before. Set
+  `VRSEG_GPU_WORKER_MODE=off` to disable it. `VRSEG_ACCURACY=off` skips the per-mesh accuracy
+  estimate, which adds about 0.1 s per mesh.
 
 </details>
 
@@ -298,8 +320,9 @@ MEDSYS/
 - [x] Tier 2: 41 expert-labelled CT scans with acquisition resolution as a factor
 - [x] Scan-clustered attribution and validation of the sampling relationship
 - [x] Paper draft (IEEE conference format)
-- [ ] Second, held-out dataset: CT-ORG (liver, lungs, bone)
-- [ ] TotalSegmentator full-resolution (1.5 mm) model
+- [x] Held-out second organ: MSD Pancreas, 41 scans, hypotheses fixed beforehand
+- [x] TotalSegmentator full-resolution (1.5 mm) model
+- [ ] Third dataset with real thin and thick reconstructions of the same scans
 - [ ] Systematic, logged literature search to confirm novelty
 - [ ] RQ2: ground-truth-free error prediction with calibrated intervals
 - [ ] RQ3: accuracy-constrained pipeline selection
@@ -308,6 +331,10 @@ MEDSYS/
 - [x] Shared, parameterised reconstruction module
 - [x] GPU inference with measured CPU and GPU timings
 - [x] Browser-side mesh checks
+- [x] Accuracy estimate per mesh, from the study's results (`accuracy.py`)
+- [x] Persistent GPU worker (`gpu_worker.py`)
+- [x] Validation of the accuracy estimate and of repeatability ([`docs/validation/`](docs/validation/))
+- [ ] Physical phantom: printed shapes of known size in a real CT scanner
 - [ ] Mesh TotalSegmentator output on its working grid (confirm on CT-ORG first)
 - [ ] Blur specified in millimetres in production
 - [ ] Verified de-identification and opaque dataset identifiers
@@ -315,10 +342,13 @@ MEDSYS/
 
 ## Status
 
-A working research prototype. The platform runs end to end and its 91 tests pass. RQ1 has results
-on phantoms and on one organ (spleen, 41 scans); a second dataset is next.
+A working research prototype. The platform runs end to end and its 118 tests pass. RQ1 has results
+on phantoms and on two organs (spleen, and the pancreas held out; 41 scans each) with both
+TotalSegmentator modes. Two validation tests check what the app itself delivers: its accuracy
+estimate against the true error of 590 of its meshes, and the repeatability of the same scan
+across 184 runs ([report](docs/validation/validation-report.pdf)).
 
-**Limitations.** Real-anatomy results cover one organ, one dataset and TotalSegmentator's fast mode.
+**Limitations.** Real-anatomy results cover two organs from one public dataset and one engine.
 Coarser acquisition was simulated by resampling, not by rescanning. The reference surfaces carry
 the native scan's own sampling error, so differences below about 0.2–0.5 mm cannot be called
 anatomical error. No claim here should be read as clinical accuracy.
