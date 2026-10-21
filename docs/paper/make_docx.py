@@ -79,7 +79,7 @@ MATH_SYMBOLS = {
     r'\times': '×', r'\leq': '≤', r'\geq': '≥', r'\le': '≤', r'\ge': '≥', r'\sum': 'Σ',
     r'\in': '∈', r'\cdot': '·', r'\ldots': '…', r'\infty': '∞', r'\max': 'max', r'\circ': '°',
     r'\{': '{', r'\}': '}', r'\%': '%', r'\,': '\u2009', r'\;': ' ', r'\!': '', r'\mm': '\u00a0mm',
-    r'\textstyle': '', r'\left': '', r'\right': '', r'\sqrt': '√',
+    r'\textstyle': '', r'\left': '', r'\right': '', r'\sqrt': '√', r'\rho': 'ρ', r'\mathrm': '',
 }
 TEXT_SYMBOLS = {r'\%': '%', r'\&': '&', r'\_': '_', r'\#': '#', r'\,': '\u2009', r'\mm': '\u00a0mm',
                 r'\ ': ' ', r'\\': ' '}

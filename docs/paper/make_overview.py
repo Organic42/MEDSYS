@@ -13,7 +13,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'figures')
 INK, MUTED, FILL, ACCENT = '#1F2933', '#667085', '#F2F4F7', '#FFE6D1'
 
 plt.rcParams.update({'font.size': 6.6, 'font.family': 'DejaVu Sans', 'pdf.fonttype': 42})
-fig, ax = plt.subplots(figsize=(7.16, 1.95))
+fig, ax = plt.subplots(figsize=(7.16, 1.7))
 ax.set_xlim(-0.5, 100.5)
 ax.set_ylim(0, 29)
 ax.axis('off')
@@ -50,9 +50,9 @@ row(17.5, 'Tier 1: digital phantoms (exact truth)', [
     (24.0, recon, FILL),
 ], 'Score against the\nexact surface')
 row(4.0, 'Tier 2: real anatomy (expert reference)', [
-    (19.0, 'CT scan and\nexpert spleen mask\n(41 scans)', FILL),
+    (19.0, 'CT, expert masks:\n41 spleen scans,\n41 pancreas, held out', FILL),
     (19.5, 'Resample: native,\n1.5 mm, 3 mm or\n5 mm slices', ACCENT),
-    (24.0, 'Segment (expert mask\nor TotalSegmentator),\nthen reconstruct', FILL),
+    (24.0, 'Segment (expert mask or\nTotalSegmentator fast\nor full), then reconstruct', FILL),
 ], 'Score against the\nreference surface\n(expert mesh, native)')
 for x, w, text in ((22.4, 19.5, 'sampling error'), (44.5, 24.0, 'segmentation and reconstruction error')):
     ax.text(x + w / 2, 0.4, text, ha='center', va='bottom', color=MUTED, fontsize=6.4, style='italic')

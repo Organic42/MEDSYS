@@ -1,0 +1,10 @@
+\begin{tabular}{lrrrrrrr}
+\toprule
+Model & Coefficients & $R^2$ & LOSO MAE & 95\% PI & slice5 held out & Pancreas MAE (PI cov.) & Box profile MAE \\
+\midrule
+M0: $b\Delta$ & 0.177 & 0.76 & 0.037 & $\pm$0.111 & 0.109 & 0.030 (98\%) & 0.045 \\
+M1: $a+b\Delta$ & 0.066, 0.145 & 0.80 & 0.030 & $\pm$0.093 & 0.099 & 0.030 (96\%) & 0.041 \\
+M2: $b_1\Delta_{\mathrm{in}}+b_2\Delta_{\mathrm{sl}}$ & 0.165, 0.159 & 0.54 & 0.056 & $\pm$0.205 & 0.414 & 0.051 (98\%) & 0.067 \\
+M3: $\sqrt{c_1\Delta_{\mathrm{in}}^2+c_2\Delta_{\mathrm{sl}}^2}$ & 0.031, 0.032 & 0.76 & 0.039 & $\pm$0.120 & 0.254 & 0.030 (98\%) & 0.045 \\
+\bottomrule
+\end{tabular}

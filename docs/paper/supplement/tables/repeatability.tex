@@ -1,0 +1,12 @@
+\begin{tabular}{llrrrrrr}
+\toprule
+Mode & Path & Runs & Organ voxels & Dice & Mesh shift & ASSD range & Seconds \\
+\midrule
+fast & one persistent process & 40 & 0 & 1.0000 & 0.000 & 0.000 & 6 \\
+ & new GPU process & 30 & 96 & 0.9993 & 0.017 & 0.014 & 30 \\
+ & CPU & 20 & 96 & 0.9990 & 0.025 & 0.014 & 34 \\
+full & one persistent process & 40 & 0 & 1.0000 & 0.000 & 0.000 & 18 \\
+ & new GPU process & 30 & 16 & 0.9996 & 0.015 & 0.011 & 76 \\
+ & CPU & 4 & 4 & 1.0000 & 0.002 & 0.006 & 175 \\
+\bottomrule
+\end{tabular}

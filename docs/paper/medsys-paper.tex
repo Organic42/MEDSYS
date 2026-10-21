@@ -1,18 +1,13 @@
-% MEDSYS paper draft: IEEE conference format, 6-page limit INCLUDING references.
+% MEDSYS paper: IEEE conference format, 6-page limit INCLUDING references.
 % Compile (Overleaf or TeX Live): pdflatex medsys-paper; bibtex medsys-paper; pdflatex x2.
+% The supplement is supplement/medsys-supplement.tex; tables marked "generated" come from
+% research/paper_stats.py and research/supplement_stats.py.
 %
 % Open items before submission (kept here, not in the PDF, to save space):
 %  1. Acknowledgements.
-%  2. Logged systematic literature search (Phase 0) to confirm the novelty claim in Sec. I-II;
-%     read the full texts of Juergensen et al. and Ahmed et al. (segmentation methods used).
-%  3. CT-ORG (liver; lungs and bone in cases 0-20) as a held-out multi-organ set.
-%  4. Median [IQR] and worst case, NSD at 0.5/1/2 mm, mixed-effects attribution.
-%  5. Local error heatmaps; 3D Slicer meshing baseline on identical masks.
-%  6. Check the page count after every edit: the limit is 6 pages including references.
-%
-% Title options (12-18 words): A (used) Stage-Wise Attribution of Geometric Error in Automatic
-% Anatomical Surface Reconstruction From Computed Tomography; B Resolution, Segmentation or
-% Smoothing? Attributing Surface Error in Automatic Reconstruction of Anatomy From Computed Tomography.
+%  2. Logged systematic literature search (Phase 0) to confirm the novelty claim in Sec. I-II.
+%  3. Real thin/thick reconstructions of the same acquisition; a multi-annotator reference.
+%  4. Check the page count after every edit: the limit is 6 pages including references.
 \documentclass[conference]{IEEEtran}
 
 \usepackage{cite}
@@ -50,7 +45,7 @@
 \maketitle
 
 \begin{abstract}
-Automatic pipelines turn computed tomography (CT) into surface models, but their geometric error is rarely traced to its source, and prior error budgets add stage errors measured one at a time. This study crosses resolution, segmentation and reconstruction in a factorial design against two references: four analytic phantoms with exact surfaces (7{,}760 meshes), and 41 expert-labelled spleen CT scans resampled before segmentation by TotalSegmentator (16{,}072 meshes). Across the tested grids, spacing had the largest descriptive share of error variance on exact surfaces (38.8\%) and on correct segmentations of real anatomy (50.5\%). Under simulated coarsening, error followed the empirical relationship $\text{ASSD}\approx0.177\,\Delta$ (95\% CI 0.171--0.184; leave-one-scan-out $R^2=0.75$), with $\Delta$ the sampling added, while Dice stayed at or above 0.968. For the engine, scans accounted for 89.5\% of the variance (94.2\% in a random-intercept model); its error was unchanged from native to 3\mm grids (0.901 and 0.907\mm) but rose by 0.188\mm with 5\mm slices. Decimation broke mesh closure without moving unsmoothed geometry, and meshing on the engine's 3\mm working grid improved closure at identical physical settings. On this dataset and engine, slice thickness and case difficulty dominate the error budget.
+Automatic pipelines turn computed tomography (CT) into surface models, but their geometric error is rarely traced to its source, and prior error budgets add stage errors measured one at a time. This study crosses resolution, segmentation source and reconstruction stages in a factorial design against two references: four analytic phantoms with exact surfaces (7{,}760 meshes), and expert-labelled CT of the spleen and, held out, the pancreas (41 scans each), resampled before segmentation by TotalSegmentator in fast and full-resolution modes (49{,}200 meshes). Spacing had the largest descriptive share of error variance on exact surfaces (38.8\%) and on correct segmentations (spleen 50.5\%, pancreas 74.2\%). Simulated coarsening moved a correct surface by $\text{ASSD}\approx0.177\,\Delta$, with $\Delta$ the sampling added; fitted on the spleen, it predicted the pancreas within 0.030\mm. For the engine, between-scan variation dominated (89.5\% and 99.9\%); its fast-mode spleen error was unchanged from native to 3\mm grids, but not for the pancreas ($+0.120$\mm) or in full-resolution mode ($+0.420$\mm), and 5\mm slices raised it throughout. Of six hypotheses fixed before the pancreas was processed, four held, one partly. Decimation broke closure without moving unsmoothed geometry, and meshing on the engine's 3\mm grid restored it.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -63,9 +58,9 @@ Surface models built from CT are now routine in surgical planning, teaching and 
 
 Accuracy studies of such models come mainly from 3D printing, where total error is split into segmentation, digital editing and printing error~\cite{schulze2024qa}. Their methodology measures each stage separately, on one phantom or structure with threshold-based segmentation, and adds the partial errors~\cite{juergensen2024phantom}; automatic engines, meanwhile, are evaluated at mask level~\cite{antonelli2022msd,wasserthal2023totalsegmentator}, so the surface a user finally sees is rarely scored. Two methodological gaps follow: an additive error budget cannot represent interactions between stages, and without an exact reference the error of the reference itself cannot be separated from that of the pipeline.
 
-This paper addresses the attribution of geometric error in \emph{automatic} pipelines, against both exact and expert references, through four questions. \textbf{Q1:} How much error does reconstruction itself introduce when the true surface is known, and which factor dominates? \textbf{Q2:} How far does coarser acquisition alone move the surface of a correct segmentation of real anatomy, and is the effect predictable? \textbf{Q3:} Does an automatic engine's surface error depend on resolution, and how is its variance shared between patient, resolution and reconstruction? \textbf{Q4:} How do the settings a deployed pipeline ships affect geometry and topology?
+This paper attributes geometric error in \emph{automatic} pipelines, against exact and expert references, through five questions. \textbf{Q1:} How much error does reconstruction itself introduce when the true surface is known? \textbf{Q2:} How far does simulated coarser acquisition alone move the surface of a correct segmentation, and how well can the shift be predicted? \textbf{Q3:} How does an engine's surface error depend on resolution and engine mode, and how is its variance shared between scans, resolution and reconstruction? \textbf{Q4:} How do deployed settings affect geometry, topology and local defects? \textbf{Q5:} Do the spleen findings hold on a held-out organ, under criteria fixed before its data were analysed?
 
-The contributions are methodological first: (1)~a two-reference factorial design that crosses all stages against exact and expert references, with resolution controlled before segmentation (Section~II); (2)~a scan-clustered attribution showing that spacing dominates error for correct segmentations but the patient dominates for an automatic engine; (3)~an empirical sampling relationship, $\text{ASSD}\approx0.177\,\Delta$, validated across scans, that predicts the error added by simulated coarsening and bounds useful metric tolerances; and (4)~practical findings on Dice, blur, decimation and meshing grids for deployed pipelines. The study makes no clinical claim, and its real-anatomy results cover one organ, one dataset and one engine mode. Sections~II--V give related work, definitions, the framework and the setup; Section~VI answers Q1--Q4; Sections~VII--X test, discuss, qualify and conclude.
+The contributions are methodological first: (1)~a two-reference factorial design that crosses the tested reconstruction stages with two segmentation sources, an expert mask and one engine in two modes, with resolution controlled before segmentation; (2)~a scan-clustered, descriptive attribution in which spacing carries the largest share of error variance for correct segmentations and between-scan variation for the engine, re-tested on a held-out organ against pre-specified criteria; (3)~an empirical sampling relationship with prediction intervals, validated across scans, levels, a second slice profile and a second organ; and (4)~practical findings on Dice, blur units, decimation, meshing grids and local defects. The study makes no clinical claim; its anatomy is two abdominal organs from one public challenge, and its coarsening is simulated. A supplement (S1--S14) holds the extended analyses.
 
 % ════════════════════════════════════════════════════════════════════════
 \section{Related Work}
@@ -85,12 +80,12 @@ Study & Reference & Segmentation & Design & Scale \\
 Juergensen~\cite{juergensen2024phantom} & 3D scan of a physical phantom & threshold & stages one at a time; total = sum & 1 phantom \\
 Ahmed~\cite{ahmed2024mandible} & scan of dissected bone & not stated & slice $\times$ pixel size & 6 cadavers \\
 Schulze~\cite{schulze2024qa} & (review) & various & categorised reported errors & 139 studies \\
-This work & exact surfaces; expert masks & deep-learning engine; expert mask & full factorial; scan-clustered & 4 phantoms; 41 scans \\
+This work & exact surfaces; expert masks & deep-learning engine (2 modes); expert mask & full factorial; scan-clustered; held-out organ & 4 phantoms; 41 + 41 scans \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\emph{How this study differs.} Table~\ref{t:related} compares the designs. Four differences matter methodologically. First, segmentation is a deep-learning engine evaluated as one pipeline stage, and the expert mask passes through the same pipeline as a segmentation-free control. Second, exact analytic surfaces measure reconstruction error, including the floor of the reference procedure itself, which no anatomical reference can provide. Third, stages are crossed in a full factorial design, so their interactions are measured: on phantoms, interactions carry about a third of the error variance and reverse the effect of smoothing between shapes (Section~VI-A), which a sum of partial errors cannot represent. Fourth, resolution is varied by resampling before segmentation in one physical frame, so the engine meets each level as an acquisition, and topology is scored alongside geometry. To our knowledge, no prior study combines these elements.
+\emph{How this study differs.} Table~\ref{t:related} compares the designs; four differences matter methodologically. First, segmentation is a deep-learning engine, in two modes, evaluated as one pipeline stage, with the expert mask passed through the same pipeline as a segmentation-free control. Second, exact analytic surfaces measure reconstruction error, including the floor of the reference procedure itself. Third, stages are crossed in a full factorial design, so interactions are measured: on phantoms they carry about a third of the variance and reverse the effect of smoothing between shapes (Section~VI-A), which a sum of partial errors cannot represent. Fourth, resolution is varied before segmentation in one physical frame, so the engine meets each level as an acquisition, topology and local defects are scored with geometry, and the findings are re-tested on a held-out organ. To our knowledge, no prior study combines these elements.
 
 % ════════════════════════════════════════════════════════════════════════
 \section{Definitions}
@@ -100,13 +95,13 @@ This work & exact surfaces; expert masks & deep-learning engine; expert mask & f
 \begin{equation}
 \text{ASSD}=\frac{\sum_{p\in P_T}d(p,S_R)+\sum_{q\in P_R}d(q,S_T)}{|P_T|+|P_R|}.
 \end{equation}
-HD95 is the larger of the two directed 95th percentiles, $\text{NSD}_\tau$ the share of points within $\tau$ of the other surface~\cite{nikolov2021nsd}, and $\bar d_{\pm}$ the mean signed distance of $P_T$ to $S_R$ (negative means shrinkage). A mesh is \emph{closed} when it has no boundary and no non-manifold edges.
+HD95 and P99 are the larger of the two directed 95th and 99th percentiles, $\text{NSD}_\tau$ the share of points within $\tau$ of the other surface~\cite{nikolov2021nsd}, and $\bar d_{\pm}$ the mean signed distance of $P_T$ to $S_R$ (negative means shrinkage). A \emph{local defect} is a face of $S_T$ whose vertices all lie more than 2\mm from $S_R$; defects sharing a vertex form a patch. A mesh is \emph{closed} when it has no boundary and no non-manifold edges.
 
 \emph{Added sampling.} A resolution level sets a minimum spacing $m_a$ per axis, so $s'_a=\max(s_a,m_a)$ and scans are only coarsened. Because sampling blur adds in quadrature, we define
 \begin{equation}
 \Delta=\sqrt{\tfrac{1}{3}\textstyle\sum_{a}\left(s_a'^2-s_a^2\right)},\label{e:delta}
 \end{equation}
-which equals $h$ when an isotropic grid $h$ replaces an infinitely fine one. Attribution uses the main-effect share $\eta^2=\sum_l n_l(\bar y_l-\bar y)^2/\sum_i(y_i-\bar y)^2$, with the remainder assigned to interactions and residual~\cite{montgomery2017doe}.
+which equals $h$ when an isotropic grid $h$ replaces an infinitely fine one. Attribution uses the main-effect share $\eta^2=\sum_l n_l(\bar y_l-\bar y)^2/\sum_i(y_i-\bar y)^2$, with the remainder assigned to interactions and residual~\cite{montgomery2017doe}. It describes the tested grid; it is not a causal contribution.
 
 % ════════════════════════════════════════════════════════════════════════
 \section{Evaluation Framework}
@@ -115,149 +110,116 @@ Both tiers call the reconstruction function that the application itself uses (Fi
 \begin{figure*}[!t]
 \centering
 \includegraphics[width=\textwidth]{overview.pdf}
-\caption{Study overview. Tier~1 scores reconstructions of analytic phantoms against their exact surfaces. Tier~2 resamples expert-labelled CT before segmentation and scores meshes from the expert mask and from TotalSegmentator against the expert reference surface.}
+\caption{Study overview. Tier~1 scores reconstructions of analytic phantoms against their exact surfaces. Tier~2 resamples expert-labelled CT before segmentation and scores meshes from the expert mask and from TotalSegmentator against the expert reference surface; the pancreas is a held-out test of the spleen findings.}
 \label{f:overview}
 \end{figure*}
 
-\emph{Tier~1.} Four phantoms with exact signed distance functions covered distinct surface types: a sphere (radius 15\mm), a thin capsule (radius 2\mm, length 44\mm), a torus (radii 18 and 6\mm; genus one) and a rounded box ($28\times20\times12$\mm, 2\mm rounding). Each was placed with a random rotation and sub-voxel offset, voxelised, reconstructed and scored with the exact signed distance function (mesh to truth) and exact point-to-triangle distances (truth to mesh). Exact surfaces measure reconstruction error without a reference of its own, including the error of the canonical procedure that builds the Tier~2 references.
+\emph{Tier~1.} Four phantoms with exact signed distance functions covered distinct surface types: a sphere (radius 15\mm), a thin capsule (radius 2\mm, length 44\mm), a torus (radii 18 and 6\mm; genus one) and a rounded box ($28\times20\times12$\mm, 2\mm rounding). Each was placed with a random rotation and sub-voxel offset, voxelised, reconstructed and scored with exact distances in both directions, which also measures the error of the procedure that builds the Tier~2 references.
 
-\emph{Tier~2.} Each CT scan and, separately, its expert mask were resampled to each level \emph{before} segmentation. Each coarsened axis was Gaussian filtered with $\sigma_a=(s'_a/s_a-1)/2$ voxels, the anti-aliasing convention of scikit-image~\cite{vanderwalt2014skimage}, then linearly interpolated so that voxel $j$ lies at $j\,s'_a$. All grids thus share one physical frame and need no offset against $S_R$. Resampling the CT, rather than coarsening a finished mask, lets the engine respond to each level as it would to a coarser acquisition; it returned its mask on the same grid. The resampled expert mask, thresholded at 0.5, is a segmentation-free control that isolates sampling error.
+\emph{Tier~2.} Each CT scan and, separately, its expert mask were resampled to each level \emph{before} segmentation. Each coarsened axis was Gaussian filtered with $\sigma_a=(s'_a/s_a-1)/2$ voxels, the anti-aliasing convention of scikit-image~\cite{vanderwalt2014skimage}, then linearly interpolated so that voxel $j$ lies at $j\,s'_a$. All grids thus share one physical frame and need no offset against $S_R$. Resampling the CT, rather than coarsening a finished mask, lets the engine respond to each level as it would to a coarser acquisition; it returned its mask on the same grid. The resampled expert mask, thresholded at 0.5, is a segmentation-free control that isolates sampling error. As a sensitivity analysis, coarsening was repeated with a rectangular slice profile one coarse voxel wide and, for the engine, with white noise (SD 20\,HU) added to the coarse CT.
 
-\emph{Design.} The design is split-plot~\cite{montgomery2017doe}: whole plots (one segmentation each) are mask source $\times$ resolution level, and sub-plots (one mesh each) are reconstruction settings, crossed in a full factorial grid plus the application's \emph{production} settings.
+\emph{Design.} The design is split-plot~\cite{montgomery2017doe}: whole plots (one segmentation each) are mask source $\times$ resolution level, and sub-plots (one mesh each) are reconstruction settings, crossed in a full factorial grid plus the application's \emph{production} settings and a \emph{production-mm} variant that keeps them but sets blur to 0.5\mm, which separates blur units from the grid.
 
 % ════════════════════════════════════════════════════════════════════════
 \section{Data and Experimental Setup}
-\emph{Data.} Tier~2 used the 41 training scans of the Medical Segmentation Decathlon Task09 Spleen~\cite{antonelli2022msd} (CC-BY-SA 4.0), each with one expert manual segmentation. In-plane spacing was 0.61--0.98\mm and slice spacing 1.5--8\mm (5\mm in 24 scans). TotalSegmentator was trained on data from one Basel hospital~\cite{wasserthal2023totalsegmentator}, so these scans are external to it, and none was used to tune any setting.
+\emph{Data.} The spleen set was the 41 training scans of Medical Segmentation Decathlon (MSD) Task09~\cite{antonelli2022msd} (CC-BY-SA 4.0), each with one expert segmentation; in-plane spacing was 0.61--0.98\mm and slice spacing 1.5--8\mm (5\mm in 24 scans). The held-out set was 41 of the 281 training scans of MSD Task07 Pancreas, drawn at random (seed 2026) before any was processed; its pancreas and tumour labels were merged, as the engine's pancreas includes lesions; in-plane spacing was 0.64--0.98\mm and slice spacing 1.25--5\mm (5\mm in 6 scans). Both sets come from one centre; TotalSegmentator was trained on data from another hospital~\cite{wasserthal2023totalsegmentator}, so the scans are external to it, and none tuned any setting.
 
-\emph{Factors.} Tier~1 voxelised each phantom at isotropic $h\in\{0.5,1,2\}$\mm and at $0.8\times0.8\times5$\mm, at five placements. Its grid crossed blur $\{0,0.5,1\}$\mm, isosurface variant (Lewiner, Lorensen), Taubin iterations $\{0,10,30,60\}$ and decimation $\{0,0.25,0.5,0.75\}$ (fraction of faces removed): 96 configurations plus production (blur 0.6 voxels, 30 iterations, decimation 0.5), giving 7{,}760 meshes. Tier~2 fixed the isosurface variant, which explained 0.0\% of Tier~1 variance, leaving 48 grid configurations plus production (decimation 0.6 for the engine's masks, as in the application). Its levels were \lvl{native}; \lvl{iso1.5} and \lvl{iso3} (minimum 1.5 and 3\mm on every axis); and \lvl{slice5} (minimum 5\mm slices, native in-plane). \lvl{iso1.5} and \lvl{iso3} resampled all 41 scans and \lvl{slice5} the 14 with thinner slices, giving 16{,}072 meshes.
+\emph{Factors.} Tier~1 voxelised each phantom at isotropic $h\in\{0.5,1,2\}$\mm and at $0.8\times0.8\times5$\mm, at five placements. Its grid crossed blur $\{0,0.5,1\}$\mm, isosurface variant (Lewiner, Lorensen), Taubin iterations $\{0,10,30,60\}$ and decimation $\{0,0.25,0.5,0.75\}$ (fraction of faces removed): 96 configurations plus production (blur 0.6 voxels, 30 iterations, decimation 0.5), giving 7{,}760 meshes. Tier~2 fixed the isosurface variant, which explained 0.0\% of Tier~1 variance, leaving 48 grid configurations, production (decimation 0.6 for the engine, as in the application) and production-mm. Its levels were \lvl{native}; \lvl{iso1.5} and \lvl{iso3} (minimum 1.5 and 3\mm on every axis); and \lvl{slice5} (minimum 5\mm slices, native in-plane). Level effects use only the scans a level resampled: all scans at \lvl{iso1.5} and \lvl{iso3}, and at \lvl{slice5} the 14 spleen and 35 pancreas scans with thinner slices. With the sensitivity runs, 57{,}944 meshes were scored (S1).
 
-\emph{Engine.} TotalSegmentator 2.13 in fast mode, the application's default, segmented each resampled scan once; fast mode predicts at 3\mm and returns the mask on the input grid.
+\emph{Engine.} TotalSegmentator 2.13 segmented each resampled scan in fast mode, the application's default, which predicts at 3\mm, and in full-resolution mode, which predicts at 1.5\mm; the latter ran only the sub-model holding the organ, on a crop found by the 3\mm model, as for single-organ use. Both return the mask on the input grid.
 
-\emph{Metrics and statistics.} Each surface was sampled with 20{,}000 points per side; distances were exact point-to-triangle distances (VTK); $\tau=1$\mm. Mask-level Dice compared each mask with the native expert mask after nearest-neighbour mapping to the native grid. Level effects were paired by scan over resampled scans, with 95\% bootstrap confidence intervals over scans (5{,}000 resamples)~\cite{efron1993bootstrap}, Wilcoxon signed-rank tests~\cite{wilcoxon1945} and Holm correction across 12 tests~\cite{holm1979}. Variance shares are descriptive main effects across the tested grid, with 95\% CIs from 1{,}000 bootstrap resamples of scans (Tier~2) or of placements within shape (Tier~1). The $\eta^2$ of scans is the share of the observed sum of squares carried by scan means; a random-intercept model, estimated by ANOVA on the balanced levels (equal to REML for balanced data), instead estimates the variance between scans after removing within-scan noise, so the two differ in estimand and data. The sampling relationship was fitted through the origin, since $\Delta=0$ reproduces the reference exactly. Leave-one-scan-out validation predicted each scan's points from a fit to the other 40 scans and pooled the errors over all 96 points; leave-one-level-out validation predicted each level from a fit to the other two. The grid comparison averaged each scan's 48 configuration-level differences, then averaged over scans with a scan bootstrap CI and a Wilcoxon test. Values are mean $\pm$ SD across scans.
+\emph{Held-out protocol.} Six hypotheses (H1--H6, Table~\ref{t:heldout}) and their pass criteria were derived from the spleen results and recorded in the repository before any pancreas scan was segmented or scored; every outcome is reported.
 
-\emph{Implementation.} Python 3.14 (NumPy, SciPy, scikit-image, PyVista/VTK) on a 6-core CPU and an RTX 5080 GPU; seed 2026.
+\emph{Metrics and statistics.} Each surface was sampled with 20{,}000 points per side; distances were exact point-to-triangle distances (VTK); $\tau=1$\mm unless stated. Mask-level Dice compared each mask with the native expert mask after nearest-neighbour mapping to the native grid. Level effects were paired by scan, with 95\% bootstrap confidence intervals over scans (5{,}000 resamples)~\cite{efron1993bootstrap} and Wilcoxon signed-rank tests~\cite{wilcoxon1945} with Holm correction~\cite{holm1979}. Variance shares are descriptive main effects across the tested grid, with 95\% CIs from 1{,}000 bootstrap resamples of scans (Tier~2) or of placements within shape (Tier~1); a random-intercept model, estimated by ANOVA on the balanced levels (equal to REML there), instead estimates the variance between scans after removing within-scan noise. The sampling relationship was fitted through the origin, since $\Delta=0$ reproduces the reference exactly; its 95\% prediction interval is the 95th percentile of the absolute leave-one-scan-out residuals. Python 3.14 (NumPy, SciPy, scikit-image, PyVista/VTK) and an RTX 5080 GPU; seed 2026.
 
 % ════════════════════════════════════════════════════════════════════════
 \section{Results}
-All 23{,}832 meshes produced a surface, and no mask was empty.
+All 57{,}944 meshes produced a surface, and no mask was empty. Re-scoring the spleen with the extended code reproduced every value of the first version exactly.
 
 \subsection{Q1: Reconstruction error on exact surfaces}
-Spacing dominates reconstruction error. The canonical configuration, which builds the Tier~2 references, has an ASSD of about $0.14\,h$ for every shape (Table~\ref{t:floor}), and placement-to-placement variation is small (coefficient of variation $\leq0.19$).
-
-\begin{table}[!t]
-\caption{Tier~1 error floor: ASSD (HD95) in mm of the canonical reconstruction against the exact surface, mean of five placements.}
-\label{t:floor}
-\centering\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-Phantom & 0.5\mm & 1\mm & 2\mm & $0.8\times0.8\times5$\mm \\
-\midrule
-Sphere & 0.070 (0.17) & 0.147 (0.34) & 0.271 (0.75) & 0.495 (1.62) \\
-Capsule & 0.069 (0.17) & 0.144 (0.35) & 0.331 (0.77) & 0.634 (1.95) \\
-Torus & 0.068 (0.16) & 0.138 (0.33) & 0.278 (0.66) & 0.499 (1.61) \\
-Rounded box & 0.072 (0.17) & 0.145 (0.33) & 0.297 (0.68) & 0.525 (1.72) \\
-\bottomrule
-\end{tabular}
-\end{table} Spacing is the largest main effect, with 38.8\% [36.1, 42.0] of ASSD variance against 21.3\% for shape; on the log scale, where its multiplicative interaction with shape largely disappears, it explains 68.6\%. Blur, smoothing, decimation and the isosurface variant together explain 2.2\% (Table~\ref{t:variance}). Smoothing depends on shape: at 2\mm, 30 Taubin iterations reduce ASSD for the sphere (0.309 to 0.199\mm), torus (0.279 to 0.203\mm) and box (0.296 to 0.224\mm) but double it for the capsule (0.425 to 0.844\mm). No mesh is open without decimation (0 of 1{,}920), and at $0.8\times0.8\times5$\mm 64\% of capsule meshes fail the topology check, mostly by splitting into pieces, because 5\mm slices cannot sample a 4\mm tube continuously.
+Spacing dominates reconstruction error. The canonical configuration, which builds the Tier~2 references, has an ASSD of about $0.14\,h$ for every shape (S2), with small placement-to-placement variation (coefficient of variation $\leq0.19$). Spacing is the largest main effect, with 38.8\% [36.1, 42.0] of ASSD variance against 21.3\% for shape; on the log scale, where its multiplicative interaction with shape largely disappears, it explains 68.6\%. Blur, smoothing, decimation and the isosurface variant together explain 2.2\% (Table~\ref{t:variance}). Smoothing depends on shape: at 2\mm, 30 Taubin iterations, averaged over the other factors, reduce ASSD for the sphere (0.309 to 0.199\mm), torus and box but double it for the capsule (0.425 to 0.844\mm). At $0.8\times0.8\times5$\mm, 64\% of capsule meshes split, as 5\mm slices cannot sample a 4\mm tube continuously.
 
 \subsection{Q2: Sampling error on real anatomy}
-Coarser acquisition alone moves a correct surface, predictably. Resampling the expert mask moves its canonical surface by 0.204, 0.418 and 0.445\mm at \lvl{iso1.5}, \lvl{iso3} and \lvl{slice5} (Table~\ref{t:tier2}; all $p<0.001$), while Dice stays at 0.985, 0.968 and 0.971. The error follows the added sampling (Fig.~\ref{f:floor}): $\text{ASSD}=0.177\,\Delta$, 95\% CI [0.171, 0.184] from a scan bootstrap, $R^2=0.76$. Predicting each scan from a fit to the other 40 gives $R^2=0.75$ and a mean absolute error of 0.037\mm, so the relationship generalises across scans. Fitted on two levels, it predicts the in-plane levels within 0.028--0.038\mm but slice-only coarsening (\lvl{slice5}) less well (0.109\mm). The coarse grid's geometric-mean or largest spacing does not predict the error ($R^2<0$), because the reference already contains the native sampling. A free intercept gives $0.066+0.145\,\Delta$, whose slope matches Tier~1's $0.14\,h$.
+Simulated coarsening alone moves a correct surface, predictably. Resampling the spleen's expert mask moves its canonical surface by 0.204, 0.418 and 0.445\mm at \lvl{iso1.5}, \lvl{iso3} and \lvl{slice5} (Table~\ref{t:tier2}; all $p<0.001$), while Dice stays at 0.985, 0.968 and 0.971. The error follows the added sampling (Fig.~\ref{f:floor}): $\text{ASSD}=0.177\,\Delta$, 95\% CI [0.171, 0.184], $R^2=0.76$; predicting each scan from the other 40 gives $R^2=0.75$, a mean absolute error of 0.037\mm and a 95\% prediction interval of $\pm0.111$\mm. Fitted on two levels, it predicts the in-plane levels within 0.028--0.038\mm but slice-only coarsening less well (0.109\mm). Refinements do not generalise better (S4): a free intercept misses a held-out level by 0.28\mm, and separate in-plane and slice weights converge to equal values, supporting the pooled $\Delta$. On the held-out pancreas the expert mask moves by 0.199, 0.456 and 0.442\mm (Dice 0.973, 0.936 and 0.942); the spleen fit predicts these within 0.030\mm on average, and the pancreas's own slope is 0.180 [0.176, 0.184].
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=0.92\columnwidth]{sampling_floor.pdf}
-\caption{Canonical ASSD of the resampled expert mask against the added sampling $\Delta$ of (\ref{e:delta}): 96 points from 41 scans ($n$ per level in the legend). Solid: fit through the origin, with its 95\% CI from a scan bootstrap (band). Dashed: the Tier~1 floor, $0.14\,h$.}
+\includegraphics[width=0.84\columnwidth]{sampling_floor.pdf}
+\caption{Canonical ASSD of the resampled spleen expert mask against the added sampling $\Delta$ of (\ref{e:delta}): 96 points from 41 scans. Solid: fit through the origin, with its 95\% CI from a scan bootstrap (band). Dashed: the Tier~1 floor, $0.14\,h$. Hollow: the held-out pancreas, which the fit did not see.}
 \label{f:floor}
 \end{figure}
 
 \begin{table*}[!t]
-\caption{Tier~2 results by resolution level (mean $\pm$ SD across scans; distances in mm; \lvl{slice5}: the 14 resampled scans). Dice is against the native expert mask, ASSD against the reference surface. Change: paired change in canonical ASSD against native [95\% bootstrap CI]; Wilcoxon $p<0.001$ except TotalSegmentator at \lvl{iso1.5} ($p=0.64$) and \lvl{iso3} ($p=0.66$), unchanged by Holm correction. Closed: share of closed meshes.}
+\caption{Tier~2 results by organ, mask source and resolution level (means across scans). Dice is against the native expert mask, ASSD (mm) of the canonical mesh against the reference surface; change: paired change in ASSD against native [95\% scan-bootstrap CI], over the scans a level resampled; closed: share (\%) of closed production meshes. Medians, IQRs and worst cases are in S3.}
 \label{t:tier2}
-\centering\footnotesize
-\setlength{\tabcolsep}{4.5pt}
-\begin{tabular}{@{}llrcccccc@{}}
-\toprule
- & & & & \multicolumn{2}{c}{Canonical} & \multicolumn{3}{c}{Production} \\
-\cmidrule(lr){5-6}\cmidrule(lr){7-9}
-Source & Level & $n$ & Dice & ASSD & Change vs native & ASSD & $\bar d_{\pm}$ & Closed \\
-\midrule
-Expert mask & \lvl{native} & 41 & -- & 0.000 & -- & 0.234 $\pm$ 0.056 & $-0.022$ & 98\% \\
- & \lvl{iso1.5} & 41 & 0.985 $\pm$ 0.003 & 0.204 $\pm$ 0.017 & $+0.204$ [$+0.198$, $+0.209$] & 0.374 $\pm$ 0.098 & $-0.043$ & 95\% \\
- & \lvl{iso3} & 41 & 0.968 $\pm$ 0.006 & 0.418 $\pm$ 0.030 & $+0.418$ [$+0.408$, $+0.426$] & 0.517 $\pm$ 0.126 & $-0.142$ & 98\% \\
- & \lvl{slice5} & 14 & 0.971 $\pm$ 0.011 & 0.445 $\pm$ 0.079 & $+0.445$ [$+0.411$, $+0.490$] & 0.425 $\pm$ 0.127 & $+0.013$ & 93\% \\
-\midrule
-TotalSegmentator & \lvl{native} & 41 & 0.940 $\pm$ 0.018 & 0.901 $\pm$ 0.197 & -- & 0.948 $\pm$ 0.218 & $+0.221$ & 66\% \\
- & \lvl{iso1.5} & 41 & 0.940 $\pm$ 0.019 & 0.905 $\pm$ 0.223 & $+0.004$ [$-0.019$, $+0.026$] & 0.958 $\pm$ 0.255 & $+0.099$ & 90\% \\
- & \lvl{iso3} & 41 & 0.940 $\pm$ 0.018 & 0.907 $\pm$ 0.206 & $+0.006$ [$-0.006$, $+0.019$] & 0.914 $\pm$ 0.247 & $+0.038$ & 95\% \\
- & \lvl{slice5} & 14 & 0.926 $\pm$ 0.014 & 1.079 $\pm$ 0.152 & $+0.188$ [$+0.150$, $+0.229$] & 1.048 $\pm$ 0.169 & $+0.075$ & 50\% \\
-\bottomrule
-\end{tabular}
+\centering\scriptsize
+\setlength{\tabcolsep}{3pt}
+\input{tables/tier2.tex}
 \end{table*}
 
-\subsection{Q3: Automatic segmentation across resolutions}
-The engine's error does not depend on in-plane resolution down to 3\mm, rises with thick slices, and is dominated by the patient. Its canonical ASSD is 0.901, 0.905 and 0.907\mm at \lvl{native}, \lvl{iso1.5} and \lvl{iso3}, with both paired confidence intervals containing zero, and its Dice is 0.940 throughout (Table~\ref{t:tier2}, Fig.~\ref{f:assd}). With 5\mm slices its ASSD rises by 0.188\mm and its Dice falls from 0.941 to 0.926 on the same 14 scans. Its error is 2.2--4.4 times that of the resampled expert mask at every coarse level. Patient-to-patient variation explains 89.5\% [65.0, 95.2] of its ASSD variance and resolution 2.7\%, with all reconstruction settings together under 0.5\% (Table~\ref{t:variance}); a random-intercept model assigns 94.2\% of the variance to scans, and the log scale 84.0\%. Its meshes lie outside the expert surface on average ($\bar d_{\pm}=+0.261$\mm canonical at native).
+\subsection{Q3: Automatic segmentation across resolutions and modes}
+In fast mode, the engine's error does not depend on in-plane resolution down to 3\mm, rises with thick slices, and is dominated by between-scan variation. On the spleen its canonical ASSD is 0.901, 0.905 and 0.907\mm at \lvl{native}, \lvl{iso1.5} and \lvl{iso3}, with both paired CIs containing zero, and its Dice is 0.940 throughout (Table~\ref{t:tier2}); with 5\mm slices its ASSD rises by 0.188\mm on the same 14 scans. Scans carry 89.5\% [65.0, 95.2] of its ASSD variance and resolution 2.7\%, with all reconstruction settings together under 0.5\% (Table~\ref{t:variance}); a random-intercept model assigns 94.2\% to scans.
 
-\begin{figure*}[!t]
-\centering
-\includegraphics[width=0.76\textwidth]{assd_by_resolution.pdf}
-\caption{ASSD to the reference surface by resolution level for the expert mask (left) and TotalSegmentator (right). Hollow boxes: canonical reconstruction; filled: production settings; points: scans.}
-\label{f:assd}
-\end{figure*}
+The full-resolution mode shows that this insensitivity belongs to the fast mode, which predicts at 3\mm anyway. On native spleen scans it is more accurate (ASSD 0.790 against 0.901\mm, better on 39 of 41 scans; Dice 0.951), and it stays so at \lvl{iso1.5} and with 5\mm slices; but on 3\mm input its ASSD rises by 0.420\mm [0.247, 0.712], by more than 0.2\mm on 25 of 41 scans, and its scan share falls to 59.3\% as resolution-by-scan interactions grow (S10). The pancreas is harder for both modes: in fast mode its native ASSD is 2.722\mm and Dice 0.753, full mode does not help (3.021\mm, better on 18 of 41 scans), and in-plane coarsening is no longer neutral ($+0.046$\mm at \lvl{iso1.5}, $+0.120$\mm at \lvl{iso3}). Much of its error is tumour that the engine leaves out of the organ: in one scan with a 732\,cm$^3$ tumour, Dice is 0.16 (S3).
 
-\begin{table}[!t]
-\caption{Descriptive main-effect shares of ASSD variance ($\eta^2$, \%) across the tested grid, with 95\% CIs from a bootstrap over placements within shape (T1) or over scans (T2). TS: TotalSegmentator. T1 interactions + residual include placement replication (2.2\%).}
+\begin{table*}[!t]
+\caption{Descriptive main-effect shares of ASSD variance ($\eta^2$, \%) across the tested grid, with 95\% CIs from a bootstrap over placements within shape (T1) or over scans (T2). TS: TotalSegmentator fast (full mode in S10). T1 interactions + residual include placement replication (2.2\%); a small negative remainder arises where \lvl{slice5} lacks some scans, so main effects are not orthogonal. $^a$Variance between scans in a random-intercept model on the levels that resample every scan: a different estimand from $\eta^2$ (Section~V).}
 \label{t:variance}
 \centering\scriptsize
-\setlength{\tabcolsep}{2.2pt}
+\setlength{\tabcolsep}{3pt}
 \input{tables/variance.tex}
+\end{table*}
+
+\subsection{Q4: Deployed settings, geometry, topology and local defects}
+Production settings shrink thin and coarse-grid structures: they raise the 2\mm capsule's error from 0.331 to 1.192\mm, shrinking it by more than half its radius, and move the spleen expert mask 0.234\mm at native and 0.517\mm at \lvl{iso3}, where the 0.6-voxel blur becomes 1.8\mm; holding blur at 0.5\mm instead lowers this to 0.486\mm, and changes production results by at most 0.065\mm on expert masks and 0.14\mm on engine masks (S7).
+
+Decimation explains at most 0.9\% of error variance but drives topology: on the unsmoothed expert mesh it leaves the surface unchanged ($<10^{-6}$\mm) in 39 of 41 spleen scans at 0.25, by first merging the coplanar patches of marching cubes, yet at 0.75 only 38--85\% of meshes stay closed. Meshing the engine's output on its 3\mm working grid instead of the native grid, at identical physical blur, smoothing and decimation, changes its ASSD by only $-0.017$\mm [$-0.032$, $-0.003$] ($p=0.02$) but raises closure at 0.75 decimation from 57\% to 83\% ($+26$ points [20, 32], $p<0.001$; 36 of 41 scans). The one spleen scan open at every setting is cut by the field of view; without it, every undecimated mesh is closed (S6).
+
+Global means hide local defects (S8). Faces more than 2\mm from the reference cover 8.9\% of the fast engine's native spleen surface (patches up to 2{,}190\,mm$^2$) and none of the resampled expert mask's; no fast-mode mesh meets an HD95 of 2\mm, while 80\% stay within $\pm5\%$ of the reference volume. In the worst spleen scan the engine misses 18\% of the organ in one region (S3); on the pancreas, defects cover 29\% of its surface, mostly missed tumour.
+
+\subsection{Q5: Held-out confirmation on the pancreas}
+Of the six hypotheses fixed from the spleen (Table~\ref{t:heldout}), four were confirmed on the pancreas, one partly and one not. The sampling relationship transferred (H1): 98\% of pancreas points fall within the spleen's prediction interval. Spacing dominated the correct segmentation (H2), and scans dominated the engine (H3; 98.5\% without the tumour scan above). Thick slices raised the engine's error again (H5), in 34 of 35 scans. Two spleen findings did not transfer: a 3\mm in-plane grid raised the engine's error by 0.120\mm, beyond the $\pm0.10$\mm margin (H4), and meshing on it, while again closing 25 points more meshes, cost 0.085\mm [0.034, 0.143] (H6). Both fit a thin, lobulated organ, whose resampled expert mask also loses more overlap at 3\mm (Dice 0.936 vs 0.968).
+
+\begin{table}[!t]
+\caption{Held-out confirmation, TS fast. $^a$Criteria fixed before the pancreas scans were processed: H1 MAE $\leq0.074$\mm; H2 resolution has the largest $\eta^2$ (\%, vs scans); H3 scan $\eta^2$ (\%) above resolution and random-intercept (RI) share above 50\%; H4 CI of the ASSD change (mm) within $\pm0.10$; H5 CI above 0; H6 closure gain at 0.75 decimation with CI above 0 and $|\Delta\text{ASSD}|\leq0.05$\mm. $^b$Leave-one-scan-out.}
+\label{t:heldout}
+\centering\scriptsize
+\setlength{\tabcolsep}{2pt}
+\input{tables/heldout.tex}
 \end{table}
 
-\subsection{Q4: Deployed settings, geometry and topology}
-
-\begin{figure*}[!t]
-\centering
-\includegraphics[width=0.68\textwidth]{topology_by_decimation.pdf}
-\caption{Share of closed meshes against decimation (fraction of faces removed), by resolution level, for the expert mask (left) and TotalSegmentator (right). One scan cut by the field of view is open at every setting, capping most curves at 98\%.}
-\label{f:topology}
-\end{figure*}
-
-Production settings shrink thin and coarse-grid structures, and decimation breaks closure without moving unsmoothed geometry. On exact surfaces, production settings reduce the sphere's error at 1\mm (0.147 to 0.088\mm) but raise the 2\mm capsule's from 0.331 to 1.192\mm, shrinking it by 1.13\mm, more than half its radius. On the expert mask they move the surface 0.234\mm at native and 0.517\mm at \lvl{iso3}, where the volume error is $-2.0\%$ (Table~\ref{t:tier2}): the 0.6-voxel blur becomes 1.8\mm on a 3\mm grid.
-
-Decimation explains at most 0.6\% of Tier~2 error variance but drives topology (Fig.~\ref{f:topology}). On the unsmoothed expert mesh it leaves the surface unchanged (ASSD $<10^{-6}$\mm) in 39 of 41 scans at 0.25 and 34 of 41 at 0.5, because decimation first merges the coplanar patches that marching cubes produces; at 0.75 only 57--83\% of meshes stay closed, even in topology-preserving mode. For the engine, production meshes built on the 3\mm grid are both closer to the reference than native-grid meshes ($-0.034$\mm [$-0.055$, $-0.013$], $p=0.003$) and more often closed (95\% against 66\%), with a median of 2{,}600 instead of 19{,}520 faces. Because production blur is set in voxels, this comparison also changes the physical blur. Holding blur in millimetres, smoothing and decimation fixed, the 3\mm grid changes the engine's ASSD by only $-0.017$\mm [$-0.031$, $-0.003$] ($p=0.02$; 27 of 41 scans lower), about 2\% of its error and below the reference floor, but at 0.75 decimation it raises closure from 57\% to 83\% ($+26$ points [20, 32], $p<0.001$; 36 of 41 scans). The grid itself thus improves topology and mesh size, not accuracy. The one scan open at every setting has its spleen cut by the field of view.
-
 % ════════════════════════════════════════════════════════════════════════
-\section{Ablation and Sensitivity}
-
-\emph{Unresampled scans.} Counting the 27 scans that \lvl{slice5} left unchanged would dilute its effect on the expert mask from 0.445 to 0.152\mm, so level effects use resampled scans only.
-
-\emph{Numerical reproducibility.} Changing only the crop origin reproduced all 2{,}009 native expert-mask meshes exactly; engine meshes moved by single-precision rounding ($\leq1.5\times10^{-5}$\mm), which decimation amplified to at most 0.016\mm and a closure change in 12 of 1{,}517 meshes (0.8\%).
-
-\emph{Cost.} Tier~1 took 2.8\,min on five CPU workers; Tier~2, 96 GPU engine calls (17--30\,s each) and 28.1\,min of scoring.
+\section{Robustness}
+\emph{Coarsening model.} A rectangular slice profile changed the spleen expert mask's sampling error by at most 0.003\mm (slope 0.174 against 0.177) and the fast engine's error by at most 0.020\mm; white noise of 20\,HU changed it by at most 0.019\mm (S9).
+\emph{Configurations.} In all 49 configurations, scans out-weighed resolution for both organs and modes, the \lvl{slice5} change was positive, and the fast engine's \lvl{iso3} change stayed within $-0.059$ to $+0.025$\mm on the spleen but was positive on the pancreas (up to $+0.166$\mm), so H4's failure is not a property of one setting (S12).
+\emph{The 14-scan subset.} All 14 resampled spleen scans moved in the same direction at \lvl{slice5}; leaving any one out kept the fast engine's effect within 0.175--0.195\mm, and the smallest effect detectable with 80\% power was 0.063\mm (S5); the 35 pancreas scans replicate it with a detectable effect of 0.040\mm.
+\emph{Case properties.} Lower organ-to-surround contrast went with higher engine error on both organs (Spearman $\rho=-0.59$ spleen, $-0.49$ pancreas). Measured scan properties explained little of the spleen's between-scan variance (leave-one-out $R^2=0.14$) but more of the pancreas's ($0.59$), where label volume, that is tumour burden, matters ($\rho=+0.49$; S11). The scan effect is thus partly explained on the pancreas and largely unexplained on the spleen.
 
 % ════════════════════════════════════════════════════════════════════════
 \section{Discussion}
-\emph{Two regimes.} With a correct segmentation, resolution leads and smoothing follows; with an automatic engine, the patient sets the error and resolution matters only through slice thickness, likely because the fast engine resamples every input to 3\mm. The ranking is thus engine and case, slice thickness, smoothing, then blur and decimation for geometry, while decimation leads for topology.
+\emph{Two regimes.} With a correct segmentation, resolution leads and smoothing follows; with an automatic engine, between-scan variation leads, and resolution matters through slice thickness and, for a thin organ or a fine-resolution engine, through in-plane spacing too. These are descriptive shares of the tested grid, not causes; decimation, negligible for geometry, leads for topology.
 
-\emph{The sampling relationship and the tolerance it implies.} Within the tested protocol, $\text{ASSD}\approx0.177\,\Delta$ turns a scan's spacing into an expected error before segmentation. It also bounds the reference: the native reference surface carries about 0.4--0.5\mm of its own sampling error on 5\mm-slice scans and 0.2\mm on slices of 2.5\mm or less, and differences below this floor are departures from the reference staircase, not anatomical error. Smoothing illustrates this: it reduces error for every compact phantom against the truth (Q1), yet moves fine-grid meshes away from the unsmoothed anatomical reference. Surface tolerances should therefore exceed the reference's sampling floor, which rules out a 0.5\mm NSD tolerance on thick-slice data.
+\emph{What the held-out organ changed.} The sampling relationship and both dominance patterns transferred; the spleen's insensitivity to 3\mm grids did not. It holds where the engine already works at 3\mm and the organ is compact, so a pipeline that resamples to 3\mm for speed should be checked per organ, and a finer engine is not uniformly better: full mode helped the spleen and not the pancreas.
 
-\emph{Relation to prior methodology.} Because stages were crossed, the study shows why additive error budgets~\cite{juergensen2024phantom} can mislead: on phantoms about a third of the variance lies in interactions, and smoothing helps or harms depending on shape. The engine's 0.9\mm ASSD is close to the 0.8\mm median segmentation error of the printing literature~\cite{schulze2024qa}, a different statistic, and its degradation at 5\mm but not 3\mm slices matches the cadaver finding~\cite{ahmed2024mandible}.
+\emph{The sampling relationship and the tolerance it implies.} Within the tested protocol, $\text{ASSD}\approx0.177\,\Delta$ turns a scan's spacing into an expected error before segmentation; its slope changed by under 2\% across organs and slice profiles. It also bounds the reference: the native reference surface carries about 0.4--0.5\mm of its own sampling error on 5\mm-slice scans and 0.2\mm on slices of 2.5\mm or less, so differences below this floor reflect the reference staircase, not anatomy, and a 0.5\mm NSD tolerance is uninformative on thick-slice data.
 
-\emph{Implications.} Report surface metrics alongside Dice, which stayed at or above 0.968 while ASSD rose by up to 0.445\mm; specify blur in millimetres; check closure after decimation where closed meshes are needed, as for printing and volume measurement; and mesh an engine's output on its working grid for closed, compact meshes.
+\emph{Relation to prior methodology.} Additive error budgets~\cite{juergensen2024phantom} miss the third of phantom variance that lies in interactions; the engine's 0.9\mm spleen ASSD is close to the 0.8\mm median segmentation error of the printing literature~\cite{schulze2024qa}, a different statistic, and its degradation at 5\mm but not 3\mm spleen slices matches the cadaver finding~\cite{ahmed2024mandible}.
+
+\emph{Implications.} Report surface metrics and local defects alongside Dice, which stayed at or above 0.936 while ASSD rose by up to 0.456\mm; specify blur in millimetres; check closure after decimation; and mesh a fast engine's output on its working grid, after checking the accuracy cost for thin organs.
 
 % ════════════════════════════════════════════════════════════════════════
 \section{Limitations and Threats to Validity}
-\emph{Internal.} Resampling simulates coarser acquisition without kernel, noise or partial-volume differences, so the sampling relationship is probably a lower bound for real acquisitions. The reference inherits native resolution and a single annotator per scan.
-\emph{External.} Real-anatomy results cover one compact organ, one dataset and the engine's fast mode; thin structures and finer engines may behave differently, and the 3\mm-grid finding needs confirmation on held-out data.
-\emph{Construct.} Global surface metrics can hide local defects, and no task-specific tolerance is evaluated.
-\emph{Conclusion.} The $\eta^2$ shares are descriptive main effects of the tested grid, not causal contributions; their CIs resample scans because meshes within a scan are not independent. \lvl{slice5} has 14 scans.
+\emph{Internal.} Coarsening is simulated: two slice profiles and noise bracket its effect (S9), but kernel, dose and partial-volume differences of real reconstructions are not reproduced, so the sampling relationship is probably a lower bound for real acquisitions. One annotator per scan means annotation style cannot be separated from engine error.
+\emph{External.} Two abdominal organs from one centre and one engine in two modes; branching structures, other centres and engines are untested.
+\emph{Construct.} Local defects and tolerance rates (S8) add detail, but no clinical tolerance is validated.
+\emph{Conclusion.} The $\eta^2$ shares are descriptive, not causal; the spleen \lvl{slice5} subset has 14 scans (S5), and the held-out set tests six hypotheses once.
 
 % ════════════════════════════════════════════════════════════════════════
 \section{Conclusion}
-On exact surfaces, reconstruction error is about $0.14\,h$ and dominated by spacing (Q1). On 41 spleen scans, simulated coarser acquisition alone moves a correct surface by about $0.177\,\Delta$ (Q2). TotalSegmentator's fast-mode error is set mostly by the patient, is unchanged from native to 3\mm grids and rises with 5\mm slices (Q3). Deployed settings shrink thin and coarse-grid structures, decimation breaks closure without moving unsmoothed geometry, and meshing at the engine's working grid improves closure and mesh size, with a negligible change in accuracy (Q4). Methodologically, crossing the stages against an exact and an expert reference reveals interactions that an additive error budget would miss. Future work will add multiple organs, a held-out dataset, real coarse acquisitions and a full-resolution engine, and will predict each case's error without ground truth to select the cheapest pipeline that meets a task's accuracy requirement.
+Reconstruction error is about $0.14\,h$ on exact surfaces (Q1), and simulated coarsening moves a correct surface by about $0.177\,\Delta$ on two organs (Q2). The engine's error is set mostly by the scan; its insensitivity to 3\mm grids holds only for the fast mode on the compact spleen, while 5\mm slices raise the error throughout (Q3). Decimation breaks closure without moving unsmoothed geometry, meshing on the engine's grid restores it, and missed tumour dominates the pancreas's local defects (Q4); four of six pre-specified hypotheses held on the held-out organ and one partly (Q5). Crossing stages against exact and expert references and testing on a held-out organ reveals interactions and limits that additive error budgets miss. As a per-mesh estimate in the application, the results held their stated coverage (S14). Future work will add real coarse acquisitions, other centres, engines, annotators and branching structures, and predict each case's error without ground truth.
 
 \section*{Data and Code Availability}
-\url{https://github.com/Organic42/MEDSYS}, release \texttt{v1.0-paper}: code in \texttt{research/}, per-mesh results in \texttt{research/results/}, paper sources and reproduction commands in \texttt{docs/paper/}. Images: Medical Segmentation Decathlon, CC-BY-SA 4.0~\cite{antonelli2022msd}; not redistributed.
+\url{https://github.com/Organic42/MEDSYS}, release \texttt{v2.0-paper}: code, per-mesh results, the held-out hypotheses, the supplement and reproduction commands. Images: Medical Segmentation Decathlon, CC-BY-SA 4.0~\cite{antonelli2022msd}; not redistributed.
 
 \section*{Acknowledgment}
 \todo{Acknowledgements.}

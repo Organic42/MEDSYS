@@ -1,36 +1,50 @@
 # Paper: stage-wise attribution of geometric error
 
-IEEE conference format, 6 pages including references. Every number in the paper
-comes from the per-mesh results in [`research/results/`](../../research/results/)
-through the scripts below.
+IEEE conference format, 6 pages including references, with a supplement
+(`supplement/medsys-supplement.tex`, S1–S14) and a point-by-point response to
+the review of the first version (`response-to-review.tex`, built from
+`response.json`). Every number comes from the per-mesh results in
+[`research/results/`](../../research/results/) through the scripts below.
+
+The held-out pancreas test follows hypotheses and pass criteria written down
+before any pancreas scan was processed:
+[`research/heldout_hypotheses.md`](../../research/heldout_hypotheses.md).
 
 ## Rebuild everything from the saved results
 
 ```bash
-# Tier 2 tables and figures (Figs. 3-4, Table III values)
-python -m research.tier2_report research/results/tier2_spleen_resolution_20261004-214129 \
-       --out docs/tier2-report --baseline research/results/tier2_spleen_native_20261003-093356
-
-# Statistics added for the paper: scan-clustered CIs, random-intercept shares,
-# sampling-relationship validation, controlled grid comparison
-# -> docs/paper/paper_numbers.json, tables/variance.tex, figures/sampling_floor.pdf
+# Paper statistics: variance shares with scan-clustered CIs, random-intercept
+# shares, sampling relationship, grid comparison, level effects and the
+# held-out hypotheses H1-H6
+# -> docs/paper/paper_numbers.json, tables/{tier2,variance,heldout}.tex, figures/sampling_floor.pdf
 python -m research.paper_stats --tier1 research/results/tier1_phantoms_20261002-222422_full \
-       --tier2 research/results/tier2_spleen_resolution_20261004-214129 --out docs/paper
+       --tier2 research/results/tier2_spleen_two_modes_20261018-210930 \
+       --pancreas research/results/tier2_pancreas_heldout_20261018-223006 --out docs/paper
+
+# Supplement S1-S14 (reads the CT volumes for S3 and S11; needs data/msd/; S13-S14 read the validation runs)
+python -m research.supplement_stats --tier1 research/results/tier1_phantoms_20261002-222422_full \
+       --spleen research/results/tier2_spleen_two_modes_20261018-210930 \
+       --pancreas research/results/tier2_pancreas_heldout_20261018-223006 \
+       --sensitivity research/results/tier2_spleen_coarsening_20261018-213641 \
+       --spleen-data data/msd/Task09_Spleen --pancreas-data data/msd/Task07_Pancreas \
+       --repeatability research/results/validation_repeatability_20261020-182532 \
+       --card-validation research/results/validation_card_20261020-203227 \
+       --out docs/paper/supplement
 
 # Fig. 1
 python docs/paper/make_overview.py
 
-# Copy the report figures the paper uses
-cp docs/tier2-report/figures/{assd_by_resolution,topology_by_decimation}.pdf docs/paper/figures/
-
 # Compile (Tectonic, or pdflatex + bibtex on Overleaf)
-tectonic -X compile docs/paper/medsys-paper.tex
-
-# Word manuscript for review (single column, tracked changes). It reads the
-# citation numbers and reference list from the build, so keep the intermediates
 cd docs/paper
 tectonic -X compile --keep-intermediates medsys-paper.tex
+tectonic -X compile supplement/medsys-supplement.tex
+
+# Word manuscript for review (reads citation numbers from the build intermediates)
 python make_docx.py medsys-paper.docx
+
+# Response to the review, as LaTeX and Word
+python make_response.py
+tectonic -X compile response-to-review.tex
 ```
 
 ## Re-run the experiments from scratch
@@ -39,24 +53,41 @@ python make_docx.py medsys-paper.docx
 # Tier 1: 7,760 phantom meshes, about 3 minutes on 5 workers
 python -m research.phantom_experiment --preset full
 
-# Tier 2: needs MSD Task09 Spleen in data/msd/Task09_Spleen
-# (https://msd-for-monai.s3-us-west-2.amazonaws.com/Task09_Spleen.tar).
-# About 35 minutes of GPU segmentation, then about 30 minutes of scoring.
-python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset full --workers 5
+# Tier 2 spleen, both engine modes. Needs MSD Task09 Spleen in data/msd/Task09_Spleen
+# (https://msd-for-monai.s3-us-west-2.amazonaws.com/Task09_Spleen.tar)
+python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset full \
+       --engines ts_fast,ts_full --workers 5
+
+# Tier 2 pancreas, the held-out organ: 41 scans drawn with seed 2026. Needs MSD Task07
+# (https://msd-for-monai.s3-us-west-2.amazonaws.com/Task07_Pancreas.tar, 12.3 GB)
+python -m research.tier2 --dataset msd_pancreas --data data/msd/Task07_Pancreas --sample 41 \
+       --preset full --engines ts_fast,ts_full --workers 5
+
+# Coarsening-model sensitivity (box slice profile, added noise)
+python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset sensitivity \
+       --engines ts_fast --workers 3
 ```
 
+Engine masks are cached, so `--segment-only` can run the engines first and a
+later call only scores. An interrupted run resumes from its folder:
+`--outdir output/research/tier2/<run>` skips the units already in its
+`partial.jsonl`. Segmentation took about 30 s per volume in fast mode and
+60 s in full mode; scoring a 41-scan run with three mask sources took about
+an hour on 5–6 workers.
+
 Seed 2026 throughout. Each run records the code commit, library versions and
-hardware in its `run.json`. Software used for the paper: Python 3.14.4,
-NumPy 2.4.4, SciPy 1.17.1, scikit-image 0.26.0, PyVista 0.48.4, VTK 9.6.2,
-nibabel 5.4.2, PyTorch 2.12.0 (CUDA 13.0), TotalSegmentator 2.13.0.
+hardware in its `run.json`. Software: Python 3.14.4, NumPy 2.4.4, SciPy
+1.17.1, scikit-image 0.26.0, PyVista 0.48.4, VTK 9.6.2, nibabel 5.4.2,
+PyTorch 2.12.0 (CUDA 13.0), TotalSegmentator 2.13.0.
 
 ## Where each result comes from
 
 | Paper item | Source |
 |---|---|
-| Table II (Tier 1 floor) | `research/results/tier1_phantoms_*/summary.md` |
-| Table III (Tier 2 by level), Figs. 3-4 | `research.tier2_report` tables `mesh.tex`, `mask.tex`, `paired.tex` |
-| Table IV (variance shares with CIs) | `tables/variance.tex`, generated by `research.paper_stats` |
-| Fig. 2 and the sampling relationship | `paper_numbers.json` -> `sampling_relationship` |
-| Controlled grid comparison (Sec. VI-D) | `paper_numbers.json` -> `grid_comparison.ts_fast.scan_level` |
-| Numerical reproducibility (Sec. VII) | `docs/tier2-report/tables/reproducibility.tex` |
+| Table II (Tier 2 by organ, source and level) | `tables/tier2.tex`, generated by `research.paper_stats` |
+| Table III (variance shares with CIs) | `tables/variance.tex`, generated by `research.paper_stats` |
+| Table IV (held-out hypotheses) | `tables/heldout.tex`; `paper_numbers.json` -> `heldout` |
+| Fig. 2 and the sampling relationship | `paper_numbers.json` -> `tier2.spleen.sampling_relationship` |
+| Grid comparison (Sec. VI-D, H6) | `paper_numbers.json` -> `tier2.<organ>.grid_comparison.ts_fast.scan_level` |
+| Engine modes, local metrics, robustness (Sec. VI-VII) | `supplement/supplement_numbers.json` and `supplement/tables/` |
+| Supplement S1-S14 | `research.supplement_stats` |
