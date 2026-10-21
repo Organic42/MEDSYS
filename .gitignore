@@ -30,7 +30,6 @@ _body.json
 _uploads/
 _nifti/
 _work/
-.claude/
 # Job store
 *.db
 *.db-wal
@@ -40,6 +39,7 @@ _work/
 build/
 dist/
 *.zip
+!samples/*.zip
 ct_test.zip
 mri_test.zip
 
@@ -52,3 +52,6 @@ docs/paper/*.bbl
 docs/paper/*.blg
 docs/paper/*.log
 docs/paper/*.docx
+
+# Printable phantom meshes: regenerate with python -m research.physical_phantom design
+docs/validation/phantom/*.stl

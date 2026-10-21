@@ -29,6 +29,10 @@
   @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 
   .app{display:grid;grid-template-rows:64px minmax(0,1fr);height:100vh;}
+  .app.demo{grid-template-rows:64px auto minmax(0,1fr);}
+  .demobar{background:var(--warning-bg);border-bottom:1px solid var(--border);border-left:3px solid var(--warning);
+    padding:7px 20px;font-size:12.5px;line-height:1.45;color:var(--text);}
+  .demobar strong{font-weight:600;}
 
   /* ── top bar ── */
   .top{display:flex;align-items:center;gap:28px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);min-width:0;}
@@ -231,6 +235,12 @@
     border-radius:9px;font-size:13px;margin-bottom:6px;}
   .rrow .val{font:400 12.5px var(--mono);color:var(--muted);}
   .pill{font-size:11.5px;font-weight:500;color:var(--text-2);background:var(--bg);border-radius:999px;padding:2px 9px;white-space:nowrap;}
+  .arow{padding:8px 10px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;}
+  .arow .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:13px;}
+  .arow .v{font:500 12.5px var(--mono);color:var(--text);white-space:nowrap;}
+  .arow .v.na{color:var(--muted);font-weight:400;}
+  .arow .s{font-size:11.5px;color:var(--text-2);line-height:1.4;margin-top:3px;}
+  #accuracy .field{margin:0 0 10px;}
   .callout{background:var(--elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px;
     color:var(--text-2);line-height:1.45;margin-bottom:12px;}
   .mtable{width:100%;border-collapse:collapse;font-size:13px;}
@@ -275,6 +285,7 @@
       <div style="min-width:0"><div class="k" id="statusK">Connecting…</div><div class="v" id="statusV">checking device</div></div>
     </div>
   </header>
+  <div class="demobar" id="demobar" role="note" hidden></div>
 
   <main class="work">
     <!-- ── left: dataset, structures, pipeline ── -->
@@ -388,19 +399,8 @@
 
       <section class="card">
         <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 20h18M6 16l4-6 4 3 5-8"/></svg></span>
-          <h2>Reliability estimate</h2><span class="aside"><span class="pill">Not available yet</span></span></div>
-        <div class="card-b">
-          <p class="callout">MEDSYS can't yet predict how far a mesh is from the true anatomy. That needs the reliability model from the research plan. Until then these stay empty rather than guessed.</p>
-          <div class="sect">Predicted error <small>(95% interval)</small></div>
-          <div class="rrow"><span>ASSD</span><span class="val">—</span></div>
-          <div class="rrow"><span>HD95</span><span class="val">—</span></div>
-          <div class="rrow"><span>Volume error</span><span class="val">—</span></div>
-          <div class="sect" style="margin-top:12px">Task suitability</div>
-          <div class="rrow"><span>Visualization</span><span class="pill">Not assessed</span></div>
-          <div class="rrow"><span>VR and education</span><span class="pill">Not assessed</span></div>
-          <div class="rrow"><span>Surgical planning</span><span class="pill">Not assessed</span></div>
-          <div class="rrow" style="margin-bottom:0"><span>Precision measurement</span><span class="pill">Not assessed</span></div>
-        </div>
+          <h2>Accuracy estimate</h2><span class="aside"><span class="pill" title="Morya and Wage, 2026 (docs/paper)">MEDSYS study</span></span></div>
+        <div class="card-b" id="accuracy"><p class="muted">Select a scan.</p></div>
       </section>
 
       <section class="card">
@@ -785,6 +785,70 @@ function buildMetrics(ds){
     + '</table>';
 }
 
+// ---------- right: accuracy estimate (accuracy.py, the MEDSYS study) ----------
+const mmFmt = x => `${(+x).toFixed(2)} mm`;
+function arow(label, value, sub, na){
+  return `<div class="arow"><div class="top"><span>${label}</span><span class="v${na ? ' na' : ''}">${value}</span></div>`
+    + (sub ? `<div class="s">${sub}</div>` : '') + '</div>';
+}
+function buildAccuracy(ds){
+  const a = ds.accuracy, el = $('accuracy');
+  if (!a || !a.structures || !Object.keys(a.structures).length){
+    el.innerHTML = '<p class="muted">No accuracy estimate for this scan.</p>'
+      + '<p class="note" style="margin-top:6px">Scans processed before this version have none; run the scan again to add one.</p>';
+    return;
+  }
+  const names = Object.keys(a.structures).sort((x, y) => x.localeCompare(y, undefined, {numeric:true}));
+  el.innerHTML = '<label class="field">Structure<select id="accStruct" aria-label="Structure for the accuracy estimate">'
+    + `<option value="">All ${names.length} structures</option>`
+    + names.map(n => `<option value="${esc(n)}">${esc(pretty(n))}</option>`).join('') + '</select></label>'
+    + '<div id="accBody"></div>'
+    + '<p class="note" style="margin-top:8px">Typical error of this pipeline from the MEDSYS study (Morya and Wage, 2026), '
+    + 'not a measurement of this scan against the true anatomy. Research use only.</p>';
+  $('accStruct').onchange = e => renderAccuracy(a, e.target.value);
+  renderAccuracy(a, '');
+}
+function renderAccuracy(a, name){
+  const lim = a.resolution_limit, sp = a.spacing_mm || [];
+  const spTxt = sp.map(v => +(+v).toFixed(2)).join(' × ');
+  let html = arow('Resolution limit', `≈ ${mmFmt(lim.estimate_mm)}`,
+    `${lim.range_mm[0].toFixed(2)}–${mmFmt(lim.range_mm[1])} from the ${spTxt} mm voxel spacing alone, even with a perfect segmentation.`);
+  const engine = a.engine === 'TotalSegmentator' ? `TotalSegmentator (${a.engine_mode})` : 'The classical engine';
+  if (!name){
+    const s = Object.values(a.structures), shift = s.map(x => x.recon_assd_mm).sort((p, q) => p - q);
+    const median = shift[Math.floor(shift.length / 2)];
+    const closed = s.filter(x => x.watertight).length;
+    const val = Object.keys(a.validated || {});
+    html += arow('Smoothing &amp; simplification', `median ${mmFmt(median)}`,
+      `Mean shift of each mesh from its raw segmentation surface: ${mmFmt(shift[0])} to ${mmFmt(shift[shift.length - 1])} across ${s.length} structures.`);
+    html += val.length
+      ? arow('Segmentation', `validated for ${val.length}`,
+          `${engine} was compared with expert labels for ${val.map(v => esc(pretty(v))).join(', ')}. Choose a structure for its figure; the others are not validated.`)
+      : arow('Segmentation', 'not validated',
+          `${engine} has not been compared with expert labels for these structures, so expect at least the resolution limit.`, true);
+    html += arow('Watertight', `${closed} of ${s.length}`,
+      'No holes and no non-manifold edges, as 3D printing and volume measurement need. Open meshes usually touch the edge of the scan.');
+  } else {
+    const s = a.structures[name], v = (a.validated || {})[name];
+    const dir = s.recon_signed_mm < 0 ? 'shrank' : 'grew';
+    html += arow('Smoothing &amp; simplification', mmFmt(s.recon_assd_mm),
+      `95% of the surface within ${mmFmt(s.recon_p95_mm)} of the raw segmentation; it ${dir} by ${mmFmt(Math.abs(s.recon_signed_mm))} on average`
+      + (s.volume_change_pct != null ? `, volume ${s.volume_change_pct > 0 ? '+' : ''}${s.volume_change_pct.toFixed(1)}%.` : '.'));
+    html += v
+      ? arow('Segmentation', `≈ ${mmFmt(v.median_mm)}`,
+          `Median surface error of ${engine} against expert labels on ${v.scans} scans ${esc(v.grid)}, `
+          + `the closest to this one (${esc(v.data)}). Middle half ${v.iqr_mm[0].toFixed(2)}–${mmFmt(v.iqr_mm[1])}; `
+          + `9 in 10 scans ${v.range90_mm[0].toFixed(2)}–${mmFmt(v.range90_mm[1])}.`)
+      : arow('Segmentation', 'not validated',
+          `${engine} has not been compared with expert labels for ${esc(pretty(name).toLowerCase())}, so expect at least the resolution limit.`, true);
+    html += arow('Watertight', s.watertight ? 'yes' : 'no',
+      s.watertight ? 'No holes and no non-manifold edges: ready for 3D printing and volume measurement.'
+                   : `Has holes or non-manifold edges${s.pieces > 1 ? `, in ${s.pieces} pieces` : ''}; it may touch the edge of the scan. Repair it before 3D printing.`,
+      !s.watertight);
+  }
+  $('accBody').innerHTML = html;
+}
+
 // ---------- centre: thumbnails ----------
 function buildThumbs(ds){
   const t = $('thumbs'); t.innerHTML = '';
@@ -805,6 +869,17 @@ function buildThumbs(ds){
 }
 
 // ---------- datasets ----------
+// A random id per browser: on a public demo the server lists only this
+// visitor's scans (and the samples). It identifies nothing else.
+const VISITOR_HEADERS = {'X-Visitor': (() => {
+  const make = () => (self.crypto && crypto.randomUUID) ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  try{
+    let v = localStorage.getItem('medsys-visitor');
+    if (!v){ v = make(); localStorage.setItem('medsys-visitor', v); }
+    return v;
+  }catch(e){ return make(); }
+})()};
 let DATASETS = [];
 function selectDataset(name){
   const ds = DATASETS.find(d => d.name === name);
@@ -819,13 +894,13 @@ function selectDataset(name){
   showView('3d');
   loadToken++;              // drop any meshes still arriving for the previous scan
   clearModel();
-  buildDatasetCard(ds); buildStructures(ds); buildMetrics(ds); buildThumbs(ds);
+  buildDatasetCard(ds); buildStructures(ds); buildMetrics(ds); buildAccuracy(ds); buildThumbs(ds);
   $('checks').innerHTML = '<p class="muted">Runs once the model loads.</p>'; $('checkState').textContent = '';
   loadModel(ds);
 }
 async function loadDatasets(prefer){
   const sel = $('dsSelect');
-  try{ DATASETS = (await (await fetch('/api/datasets')).json()).datasets; }catch(e){ DATASETS = []; }
+  try{ DATASETS = (await (await fetch('/api/datasets', {headers:VISITOR_HEADERS})).json()).datasets; }catch(e){ DATASETS = []; }
   $('dsCount').textContent = DATASETS.length ? `${DATASETS.length} available` : '';
   sel.innerHTML = '';
   if (!DATASETS.length){
@@ -870,10 +945,11 @@ const MEASURED = {MR:true};
 const MEDSAM = ['MedSAM refine',433,25];
 // The app always runs TotalSegmentator in fast (3 mm) mode. MR: same study,
 // warm GPU run (the first GPU run after a restart took 45 s, not 30 s).
-// CT: one end-to-end CPU run on a 64-slice chest CT (79 structures).
+// CT: a 64-slice chest CT (79 structures), October 2026, with the accuracy
+// estimate on; the GPU column uses the warm persistent GPU worker.
 const TS_STEPS = {
   MR: [['DICOM → NIfTI',9,9],['TotalSegmentator (nnU-Net, fast)',24,30],['Mesh structures',1,1]],
-  CT: [['Convert, segment and mesh 79 structures',83,null]],
+  CT: [['DICOM → NIfTI',3,3],['TotalSegmentator (nnU-Net, fast)',34,5],['Mesh 79 structures + accuracy estimate',53,54]],
 };
 // Seconds below 90 s, so measured values like 75 s or 83 s aren't rounded to "~1 min".
 const fmt = s => s >= 90 ? `~${Math.round(s/60)} min` : `~${s}s`;
@@ -897,7 +973,7 @@ function renderEstimate(){
     const tkey = key === 'CT' ? 'CT' : 'MR';   // PET runs through the MR model
     est = estimateTable(TS_STEPS[tkey], gi);
     if (tkey === 'MR' && gpu) notes += '<div class="note">Fast mode is no quicker on the GPU than the CPU (24 s): CUDA start-up outweighs the small model.</div>';
-    if (tkey === 'CT' && gpu) notes += '<div class="note">Not yet timed on the GPU. On the CPU this took ~83 s for a 64-slice chest CT.</div>';
+    if (tkey === 'CT' && gpu) notes += '<div class="note">With the persistent GPU worker warm; the first scan after start-up takes a few seconds longer.</div>';
     notes += '<div class="note">Measured on one scan on this machine; larger scans take longer.</div>';
   } else {
     const rows = STEPS[key];
@@ -956,7 +1032,7 @@ goBtn.onclick = async () => {
   JOB_ACTIVE = true;
   setJob('running', 'Uploading…'); setStatus('running', 'Uploading', chosen.name);
   try{
-    const r = await fetch('/api/upload', {method:'POST', body:fd});
+    const r = await fetch('/api/upload', {method:'POST', body:fd, headers:VISITOR_HEADERS});
     if (!r.ok){ throw new Error((await r.json()).detail || 'upload failed'); }
     const {job_id, name} = await r.json();
     poll(job_id, name);
@@ -1005,6 +1081,13 @@ async function initCapabilities(){
   try{
     const c = await (await fetch('/api/capabilities')).json();
     if (!c.totalseg){ $('engineTotalseg').disabled = true; $('engineNote').style.display = 'block'; }
+    if (c.public_demo){
+      $('demobar').innerHTML = '<strong>Public demo.</strong> Please upload only anonymised or public scans, never one that '
+        + `identifies a patient. Your scans are visible only to you and are deleted after ${c.retention_minutes} minutes `
+        + `(uploads up to ${c.max_upload_mb} MB). A sample chest CT (TCIA Lung-PET-CT-Dx, CC BY 4.0) is preloaded. `
+        + 'Research prototype, not a medical device.';
+      $('demobar').hidden = false; document.querySelector('.app').classList.add('demo');
+    }
   }catch(e){ /* capabilities check is best-effort; engine stays enabled */ }
 }
 

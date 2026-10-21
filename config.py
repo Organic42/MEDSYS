@@ -41,6 +41,21 @@ MAX_UPLOAD_MB = int(os.environ.get('VRSEG_MAX_UPLOAD_MB', '4096'))
 # Job timeout (seconds) for the Redis/RQ worker path
 JOB_TIMEOUT = int(os.environ.get('VRSEG_JOB_TIMEOUT', '3600'))
 
+# Public demo mode (publicdemo.py): per-visitor datasets, uploads deleted after
+# each job, results after RETENTION_MIN minutes, at most MAX_QUEUE jobs at once.
+PUBLIC_DEMO = os.environ.get('VRSEG_PUBLIC_DEMO', '').lower() in ('1', 'true', 'on', 'yes')
+RETENTION_MIN = int(os.environ.get('VRSEG_RETENTION_MIN', '60'))
+MAX_QUEUE = int(os.environ.get('VRSEG_MAX_QUEUE', '3'))
+
+# Accuracy estimate for every mesh (accuracy.py): compares each delivered mesh
+# with the raw segmentation surface, adding a fraction of a second per mesh.
+ACCURACY = os.environ.get('VRSEG_ACCURACY', 'on').lower() != 'off'
+
+# Persistent GPU worker (gpu_worker.py): 'auto' starts it when a CUDA GPU is
+# present and keeps the models loaded between jobs; 'off' runs every GPU step
+# inside the job's own process, as before.
+GPU_WORKER = os.environ.get('VRSEG_GPU_WORKER_MODE', 'auto').lower()
+
 # Production queue: set REDIS_URL to use Redis+RQ; otherwise an in-process pool
 REDIS_URL = os.environ.get('VRSEG_REDIS_URL') or os.environ.get('REDIS_URL') or ''
 

@@ -13,6 +13,9 @@ def main():
     from rq import Queue, Worker
 
     jobstore.init()
+    # Jobs run here, so the persistent GPU worker belongs here too (no-op without a GPU).
+    import gpu_worker
+    gpu_worker.ensure_started(wait=True)
     conn = Redis.from_url(config.REDIS_URL)
     queue = Queue('segmentation', connection=conn)
     print(f"[worker] listening on {config.REDIS_URL} queue=segmentation", flush=True)

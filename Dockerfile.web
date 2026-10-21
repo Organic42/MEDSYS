@@ -12,7 +12,10 @@ ENV PYTHONUNBUFFERED=1 \
     VRSEG_OUTPUT=/data/output \
     VRSEG_UPLOADS=/data/uploads \
     VRSEG_DB=/data/jobs.db \
-    VRSEG_MAX_UPLOAD_MB=512 \
+    VRSEG_MAX_UPLOAD_MB=200 \
+    VRSEG_PUBLIC_DEMO=1 \
+    VRSEG_RETENTION_MIN=60 \
+    VRSEG_MAX_QUEUE=3 \
     PORT=7860 \
     HOME=/home/user
 

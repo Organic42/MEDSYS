@@ -31,6 +31,10 @@ def main():
         sys.argv = [sys.argv[0]] + sys.argv[2:]
         import segmentation_pipeline
         segmentation_pipeline.main()
+    elif len(sys.argv) > 1 and sys.argv[1] == '--gpu-worker':
+        # The persistent GPU worker the app starts (see gpu_worker.py).
+        import gpu_worker
+        gpu_worker.serve()
     else:
         import launcher
         launcher.main()

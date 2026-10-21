@@ -59,3 +59,8 @@ def run_segmentation(job_id, input_dir, name, modality=None,
                             message=f'Pipeline exited with code {proc.returncode}')
     except Exception as e:  # noqa: BLE001
         jobstore.update(job_id, status='error', message=str(e))
+    finally:
+        if config.PUBLIC_DEMO:
+            # public demo: keep no uploaded scan once its job is over
+            import publicdemo
+            publicdemo.remove_upload(input_dir)

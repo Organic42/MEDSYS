@@ -65,6 +65,18 @@ def get(job_id):
     return d
 
 
+def count_active():
+    """Jobs waiting or running."""
+    with _conn() as c:
+        return c.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','running')").fetchone()[0]
+
+
+def delete_older_than(cutoff):
+    """Delete finished jobs last updated before `cutoff` (epoch seconds)."""
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM jobs WHERE updated < ? AND status IN ('done','error')", (cutoff,))
+
+
 def prune(days):
     """Delete finished jobs older than `days` (housekeeping)."""
     if days <= 0:

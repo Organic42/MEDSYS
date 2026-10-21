@@ -11,11 +11,14 @@ import shutil
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
 
+import accuracy
 import config
+import gpu_worker
 import jobstore
+import publicdemo
 import tasks
 
 app = FastAPI(title="MEDSYS")
@@ -46,6 +49,17 @@ def _dispatch(job_id, extract_dir, name, modality, no_medsam, engine):
 def _startup():
     jobstore.init()
     jobstore.prune(config.JOB_RETENTION_DAYS)
+    # In-process jobs share this machine's GPU: start the persistent worker.
+    # With Redis, jobs run in worker.py, which starts its own.
+    if _queue is None:
+        gpu_worker.ensure_started()
+    if config.PUBLIC_DEMO:
+        publicdemo.start(_dispatch)
+
+
+@app.on_event('shutdown')
+def _shutdown():
+    gpu_worker.stop()
 
 
 # ── API ───────────────────────────────────────────────────────────────────
@@ -76,13 +90,22 @@ def ready():
 @app.post('/api/upload')
 async def upload(file: UploadFile = File(...), name: str = Form(None),
                  modality: str = Form(None), no_medsam: str = Form(None),
-                 engine: str = Form('heuristic')):
+                 engine: str = Form('heuristic'), x_visitor: str = Header(None)):
     if not file.filename.lower().endswith('.zip'):
         raise HTTPException(400, "Please upload a .zip of DICOM files")
+    owner = None
+    if config.PUBLIC_DEMO:
+        owner = publicdemo.owner_tag(x_visitor)
+        if owner is None:
+            raise HTTPException(400, 'Reload the page and try again')
+        if publicdemo.busy():
+            raise HTTPException(503, 'The demo is busy with other scans. Please try again in a minute.')
 
     job_id = uuid.uuid4().hex[:12]
     ds_name = (name or os.path.splitext(file.filename)[0]).strip()
     ds_name = ''.join(c if c.isalnum() or c in '-_' else '_' for c in ds_name) or job_id
+    if config.PUBLIC_DEMO:
+        ds_name = f'{ds_name[:40]}_{job_id}'       # result URLs cannot be guessed
 
     work = os.path.join(config.UPLOAD_ROOT, job_id)
     os.makedirs(work, exist_ok=True)
@@ -109,6 +132,8 @@ async def upload(file: UploadFile = File(...), name: str = Form(None),
         shutil.rmtree(work, ignore_errors=True)
         raise HTTPException(400, f"Bad zip: {e}")
 
+    if owner:
+        publicdemo.mark(os.path.join(config.OUTPUT_ROOT, ds_name), owner)
     jobstore.create(job_id, ds_name, engine=engine)
     _dispatch(job_id, extract_dir, ds_name, modality, bool(no_medsam), engine)
     return {'job_id': job_id, 'name': ds_name}
@@ -148,6 +173,10 @@ def capabilities():
         'medsam': _has_module('torch') and os.path.exists(
             os.path.join(config.PROJECT_DIR, 'medsam_vit_b.pth')),
         'queue': 'redis' if config.REDIS_URL else 'in-process',
+        'gpu_worker': gpu_worker.status(),
+        'public_demo': config.PUBLIC_DEMO,
+        'retention_minutes': config.RETENTION_MIN if config.PUBLIC_DEMO else None,
+        'max_upload_mb': config.MAX_UPLOAD_MB,
     }
 
 
@@ -174,12 +203,12 @@ def _list_assets(ds_dir):
 
 
 @app.get('/api/datasets')
-def list_datasets():
+def list_datasets(x_visitor: str = Header(None)):
     out = []
     if os.path.isdir(config.OUTPUT_ROOT):
         for name in sorted(os.listdir(config.OUTPUT_ROOT)):
             d = os.path.join(config.OUTPUT_ROOT, name)
-            if not os.path.isdir(d):
+            if not os.path.isdir(d) or not publicdemo.visible(d, x_visitor):
                 continue
             pngs, meshes, report = _list_assets(d)
             if pngs or meshes:
@@ -193,7 +222,8 @@ def list_datasets():
                     except Exception:
                         pass
                 out.append({'name': name, 'images': pngs, 'meshes': meshes,
-                            'report': report, 'validation': validation})
+                            'report': report, 'validation': validation,
+                            'accuracy': accuracy.for_dataset(d, report)})
     return {'datasets': out}
 
 
