@@ -1,0 +1,218 @@
+{
+  "tier": 2,
+  "dataset": "msd_pancreas",
+  "dataset_info": {
+    "title": "Medical Segmentation Decathlon, Task07 Pancreas",
+    "licence": "CC-BY-SA 4.0",
+    "labels": "expert manual segmentation of the pancreas and of pancreatic tumour in every training case; the two labels are merged into the organ",
+    "structures": {
+      "pancreas": [
+        1,
+        2
+      ]
+    },
+    "manual_cases": {}
+  },
+  "preset": "full",
+  "seed": 2026,
+  "cases": [
+    "pancreas_015",
+    "pancreas_041",
+    "pancreas_049",
+    "pancreas_058",
+    "pancreas_075",
+    "pancreas_080",
+    "pancreas_083",
+    "pancreas_104",
+    "pancreas_120",
+    "pancreas_125",
+    "pancreas_147",
+    "pancreas_148",
+    "pancreas_155",
+    "pancreas_158",
+    "pancreas_194",
+    "pancreas_204",
+    "pancreas_211",
+    "pancreas_228",
+    "pancreas_255",
+    "pancreas_261",
+    "pancreas_262",
+    "pancreas_270",
+    "pancreas_274",
+    "pancreas_279",
+    "pancreas_285",
+    "pancreas_286",
+    "pancreas_291",
+    "pancreas_299",
+    "pancreas_309",
+    "pancreas_311",
+    "pancreas_316",
+    "pancreas_321",
+    "pancreas_339",
+    "pancreas_345",
+    "pancreas_351",
+    "pancreas_365",
+    "pancreas_369",
+    "pancreas_385",
+    "pancreas_393",
+    "pancreas_415",
+    "pancreas_416"
+  ],
+  "structures": [
+    "pancreas"
+  ],
+  "engines": [
+    "ts_fast",
+    "ts_full"
+  ],
+  "grid": "full",
+  "grid_levels": {
+    "blur_mm": [
+      0.0,
+      0.5,
+      1.0
+    ],
+    "taubin_iter": [
+      0,
+      10,
+      30,
+      60
+    ],
+    "decimation": [
+      0.0,
+      0.25,
+      0.5,
+      0.75
+    ]
+  },
+  "isosurface": "lewiner (fixed: Tier 1 found it explained 0.0% of variance)",
+  "canonical": {
+    "blur_mm": 0.0,
+    "taubin_iter": 0,
+    "decimation": 0.0
+  },
+  "production": {
+    "ts_fast/default": [
+      0.6,
+      30,
+      0.6
+    ],
+    "ts_full/default": [
+      0.6,
+      30,
+      0.6
+    ],
+    "classical/lungs": [
+      0.7,
+      30,
+      0.5
+    ],
+    "classical/bone": [
+      0.5,
+      30,
+      0.4
+    ],
+    "gt/default": [
+      0.6,
+      30,
+      0.5
+    ]
+  },
+  "reference_surface": "canonical reconstruction of the expert mask at native spacing",
+  "resolutions": {
+    "native": [
+      0.0,
+      0.0
+    ],
+    "iso1.5": [
+      1.5,
+      1.5
+    ],
+    "iso3": [
+      3.0,
+      3.0
+    ],
+    "slice5": [
+      0.0,
+      5.0
+    ]
+  },
+  "coarsening_variants": {
+    "box": "rectangular slice profile one coarse voxel wide",
+    "noise": "Gaussian profile plus white noise, SD 20 HU, on the CT"
+  },
+  "case_sample": 41,
+  "ts_modes": {
+    "ts_fast": {
+      "fast": true
+    },
+    "ts_full": {
+      "fast": false,
+      "robust_crop": true
+    }
+  },
+  "resolution_rule": "minimum spacing (in-plane mm, slice mm); coarsen only; CT and expert mask resampled with Gaussian anti-aliasing (sigma = (factor - 1) / 2 voxels) and linear interpolation, mask thresholded at 0.5; engine masks scored at mask level after nearest-neighbour mapping to native",
+  "samples_per_side": 20000,
+  "nsd_tolerance_mm": 1.0,
+  "segmentation_device": "gpu",
+  "segmentation_timings_s": {
+    "pancreas_015": {},
+    "pancreas_041": {},
+    "pancreas_049": {},
+    "pancreas_058": {},
+    "pancreas_075": {},
+    "pancreas_080": {},
+    "pancreas_083": {},
+    "pancreas_104": {},
+    "pancreas_120": {},
+    "pancreas_125": {},
+    "pancreas_147": {},
+    "pancreas_148": {},
+    "pancreas_155": {},
+    "pancreas_158": {},
+    "pancreas_194": {},
+    "pancreas_204": {},
+    "pancreas_211": {},
+    "pancreas_228": {},
+    "pancreas_255": {},
+    "pancreas_261": {},
+    "pancreas_262": {},
+    "pancreas_270": {},
+    "pancreas_274": {},
+    "pancreas_279": {},
+    "pancreas_285": {},
+    "pancreas_286": {},
+    "pancreas_291": {},
+    "pancreas_299": {},
+    "pancreas_309": {},
+    "pancreas_311": {},
+    "pancreas_316": {},
+    "pancreas_321": {},
+    "pancreas_339": {},
+    "pancreas_345": {},
+    "pancreas_351": {},
+    "pancreas_365": {},
+    "pancreas_369": {},
+    "pancreas_385": {},
+    "pancreas_393": {},
+    "pancreas_415": {},
+    "pancreas_416": {}
+  },
+  "totalsegmentator_version": "2.13.0",
+  "rows": 25045,
+  "units": 492,
+  "resumed_units": 0,
+  "workers": 6,
+  "wall_time_s": 2814.6,
+  "commit": "6ed708d+dirty",
+  "versions": {
+    "python": "3.14.4",
+    "numpy": "2.4.4",
+    "scipy": "1.17.1",
+    "skimage": "0.26.0",
+    "pyvista": "0.48.4",
+    "vtk": "9.6.2"
+  },
+  "platform": "Windows-11-10.0.26300-SP0",
+  "cpu_count": 12
+}

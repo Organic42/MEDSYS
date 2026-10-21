@@ -81,11 +81,48 @@ def test_engine_support():
 
 def test_grid_sizes_and_canonical():
     full = tier2.configs_for('full', 'gt', 'spleen')
-    assert len(full) == 3 * 4 * 4 + 1                  # isosurface fixed; plus production
+    assert len(full) == 3 * 4 * 4 + 2                  # isosurface fixed; production twice
     assert sum(c['config'] == 'production' for c in full) == 1
-    assert len(tier2.configs_for('pilot', 'gt', 'spleen')) == 8 + 1
+    assert len(tier2.configs_for('pilot', 'gt', 'spleen')) == 8 + 2
     canon = [c for c in tier2.configs_for('canonical', 'gt', 'spleen') if c['config'] == 'grid']
     assert canon == [dict(tier2.CANONICAL, config='grid', blur_vox=None)]
+
+
+def test_production_mm_keeps_production_but_sets_blur_in_mm():
+    for source in ('gt', 'ts_fast', 'ts_full'):
+        cfgs = {c['config']: c for c in tier2.configs_for('canonical', source, 'spleen')}
+        prod, mm = cfgs['production'], cfgs['production_mm']
+        assert (mm['taubin_iter'], mm['decimation']) == (prod['taubin_iter'], prod['decimation'])
+        assert mm['blur_vox'] is None and mm['blur_mm'] == tier2.PRODUCTION_BLUR_MM
+
+
+def test_coarsening_variants():
+    assert tier2.split_level('slice5~box') == ('slice5', 'box')
+    assert tier2.split_level('iso3') == ('iso3', '')
+    with pytest.raises(ValueError):
+        tier2.split_level('iso3~blur')
+    # variants share their base level's grid and sort after every plain level
+    assert tier2.grid_spacing((0.8, 0.8, 1.0), 'iso3~noise') == tier2.grid_spacing((0.8, 0.8, 1.0), 'iso3')
+    order = sorted(['slice5~box', 'native', 'iso3~noise', 'iso3'], key=tier2.level_index)
+    assert order == ['native', 'iso3', 'slice5~box', 'iso3~noise']
+
+
+def test_box_profile_is_a_slab_average():
+    np.testing.assert_allclose(tier2.box_kernel(2.0), [0.25, 0.5, 0.25])
+    k = tier2.box_kernel(5 / 0.8)
+    assert abs(k.sum() - 1) < 1e-12 and np.allclose(k, k[::-1])
+    # a box profile keeps the mean of a slowly varying volume and the volume of a mask
+    vol = np.zeros((40, 40, 40), np.float32)
+    vol[10:30, 10:30, 8:32] = 1
+    coarse = tier2.resample(vol, (1, 1, 1), (1, 1, 4), profile='box')
+    assert abs(coarse.sum() * 4 - vol.sum()) / vol.sum() < 0.05
+
+
+def test_full_mode_segments_only_the_study_structures():
+    assert tier2.ts_roi(['spleen']) == ['spleen']
+    assert tier2.ts_roi(['lungs']) == list(tier2.LUNG_LOBES)
+    assert tier2.ts_roi(['bone']) is None
+    assert tier2.production_for('ts_full', 'spleen') == tier2.production_for('ts_fast', 'spleen')
 
 
 @pytest.mark.parametrize('source, structure, expected', [
@@ -188,6 +225,18 @@ def test_segment_case_caches_coarse_engine_masks(tmp_path, monkeypatch):
         'classical_bone.npz', 'classical_bone@iso3.npz', 'classical_bone@slice5.npz']   # resampled CTs removed
 
 
+def test_resume_keeps_only_complete_units(tmp_path):
+    n = len(tier2.configs_for('canonical', 'gt', 'spleen'))
+    unit = {'case': 'c1', 'structure': 'spleen', 'source': 'gt', 'resolution': 'iso3'}
+    lines = [json.dumps(dict(unit, level='mesh', config=i)) for i in range(n)]       # complete
+    lines += [json.dumps(dict(unit, case='c2', level='mesh', config=0))]              # cut short
+    path = tmp_path / 'partial.jsonl'
+    path.write_text('\n'.join(lines) + '\n{"case": "c3", "trunc', encoding='utf-8')   # torn last line
+    rows, done = tier2.resume_rows(str(path), 'canonical')
+    assert done == {('c1', 'spleen', 'gt', 'iso3')} and len(rows) == n
+    assert len(path.read_text(encoding='utf-8').splitlines()) == n                 # file rewritten
+
+
 def test_presets_cover_resolutions():
     assert tier2.PRESETS['full']['resolutions'] == tuple(tier2.RESOLUTIONS)
     assert 'native' in tier2.PRESETS['smoke']['resolutions']
@@ -205,6 +254,18 @@ def test_compare_meshes_recovers_a_1mm_expansion():
     assert m['assd_mm'] == pytest.approx(1.0, abs=0.03)
     assert m['volume_err_pct'] == pytest.approx((1.1 ** 3 - 1) * 100, abs=1.0)
     assert m['nsd'] < 0.01 and m['topology_ok']
+    assert m['nsd_2mm'] == 1.0 and m['defect_area_pct'] == 0.0     # 1 mm everywhere: no 2 mm defect
+
+
+def test_defect_patches_measure_displaced_area():
+    pytest.importorskip('pyvista')
+    from research.surface_metrics import compare_meshes, mesh_area
+    tv, tf = sphere_mesh(13)                      # 3 mm outside everywhere: one patch, all of it
+    rv, rf = sphere_mesh(10)
+    m = compare_meshes(tv, tf, rv, rf, np.random.default_rng(4), n_samples=3000)
+    assert m['defect_area_pct'] == pytest.approx(100.0)
+    assert m['defect_patch_mm2'] == pytest.approx(mesh_area(tv, tf), rel=1e-6)
+    assert m['nsd_2mm'] < 0.01 and m['p99_mm'] > 2.5
 
 
 def test_compare_meshes_sign_survives_flipped_reference_normals():
@@ -254,7 +315,7 @@ def test_run_unit_end_to_end(tmp_path, monkeypatch):
     mask_row = [r for r in eng_rows if r['level'] == 'mask'][0]
     assert 0.5 < mask_row['dice'] < 1.0
     meshes = [r for r in eng_rows if r['level'] == 'mesh']
-    assert {r['config'] for r in meshes} == {'grid', 'production'}
+    assert {r['config'] for r in meshes} == {'grid', 'production', 'production_mm'}
     assert all(r['status'] == 'ok' for r in meshes)
     canon = [r for r in meshes if r['is_canonical']][0]
     assert canon['mean_signed_mm'] < 0                               # smaller engine sphere: shrinkage

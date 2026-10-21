@@ -24,6 +24,8 @@ Usage (from the repository root):
   python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset pilot
   python -m research.tier2 --dataset ctorg --data data/ctorg --preset full --workers 5
   python -m research.tier2 --dataset msd_spleen --data ... --resolutions native,iso3
+  python -m research.tier2 --dataset msd_pancreas --data data/msd/Task07_Pancreas --sample 41 --preset full
+  python -m research.tier2 --dataset msd_spleen --data ... --preset sensitivity --engines ts_fast
   python -m research.tier2 --resummarise output/research/tier2/<run>
 
 Outputs go to output/research/tier2/<timestamp>_<dataset>_<preset>/
@@ -60,6 +62,14 @@ DATASETS = {
         'structures': {'spleen': (1,)},
         'manual_cases': {},
     },
+    'msd_pancreas': {
+        'title': 'Medical Segmentation Decathlon, Task07 Pancreas',
+        'licence': 'CC-BY-SA 4.0',
+        'labels': ('expert manual segmentation of the pancreas and of pancreatic tumour in every '
+                   'training case; the two labels are merged into the organ'),
+        'structures': {'pancreas': (1, 2)},
+        'manual_cases': {},
+    },
     'ctorg': {
         'title': 'CT-ORG (The Cancer Imaging Archive)',
         'licence': 'CC BY 3.0',
@@ -77,7 +87,7 @@ def _natural(s):
 
 def list_cases(dataset, root):
     """[(case_id, case_number, image_path, label_path)] for a dataset folder."""
-    if dataset == 'msd_spleen':
+    if dataset.startswith('msd_'):
         with open(os.path.join(root, 'dataset.json'), encoding='utf-8') as fh:
             meta = json.load(fh)
         out = []
@@ -121,13 +131,36 @@ RESOLUTIONS = {
 }
 
 
+# Alternative coarsening models for the sensitivity analysis, written as
+# '<level>~<variant>'. 'box' replaces the Gaussian anti-aliasing with a
+# rectangular slice profile as wide as the coarse voxel (a slab average);
+# 'noise' keeps the Gaussian and adds white noise of NOISE_HU to the coarse
+# CT, so only the engine sees it.
+VARIANTS = ('', 'box', 'noise')
+NOISE_HU = 20.0
+
+
+def split_level(resolution):
+    """'iso3~box' -> ('iso3', 'box'); 'iso3' -> ('iso3', '')."""
+    base, _, variant = resolution.partition('~')
+    if base not in RESOLUTIONS or variant not in VARIANTS:
+        raise ValueError(f'unknown resolution level {resolution!r}')
+    return base, variant
+
+
+def level_index(resolution):
+    """Sort key and seed component: the base level, then the variant."""
+    base, variant = split_level(resolution)
+    return list(RESOLUTIONS).index(base) + 10 * VARIANTS.index(variant)
+
+
 def grid_spacing(spacing, resolution):
     """Voxel spacing of a scan after coarsening it to a resolution level.
 
     The slice axis is the one with the largest native spacing (axis 2 when
     the scan is isotropic).
     """
-    inplane, slice_mm = RESOLUTIONS[resolution]
+    inplane, slice_mm = RESOLUTIONS[split_level(resolution)[0]]
     spacing = np.asarray(spacing, dtype=float)
     floor = np.full(3, inplane)
     floor[int(np.argmax(spacing)) if np.ptp(spacing) > 1e-6 else 2] = slice_mm
@@ -139,31 +172,49 @@ def grid_shape(shape, spacing, grid):
     return tuple(int(np.floor((n - 1) * s / g + 1e-9)) + 1 for n, s, g in zip(shape, spacing, grid))
 
 
-def resample(volume, spacing, grid, order=1):
+def box_kernel(width):
+    """Weights of a rectangular profile `width` voxels wide on the integer voxel grid."""
+    half = width / 2
+    k = np.arange(-int(np.ceil(half)), int(np.ceil(half)) + 1)
+    w = np.clip(np.minimum(k + 0.5, half) - np.maximum(k - 0.5, -half), 0, None)
+    return w / w.sum()
+
+
+def resample(volume, spacing, grid, order=1, profile='gaussian'):
     """Anti-aliased resampling onto a coarser grid in the same physical frame.
 
-    Each coarsened axis is Gaussian filtered first (sigma = (factor - 1) / 2
-    voxels, scikit-image's rescale convention), approximating the wider
-    sampling aperture of a coarser acquisition; then voxel j of the output
-    is interpolated at j * grid. Returns float32.
+    Each coarsened axis is filtered first, approximating the wider sampling
+    aperture of a coarser acquisition: by default a Gaussian with
+    sigma = (factor - 1) / 2 voxels (scikit-image's rescale convention), or
+    with profile='box' a rectangular profile one coarse voxel wide. Voxel j
+    of the output is then interpolated at j * grid. Returns float32.
     """
     from scipy import ndimage
     vol = np.asarray(volume, dtype=np.float32)
     factor = np.asarray(grid, dtype=float) / np.asarray(spacing, dtype=float)
     if np.allclose(factor, 1.0):
         return vol
-    sigma = np.maximum(0.0, (factor - 1) / 2)
-    if np.any(sigma > 0):
-        vol = ndimage.gaussian_filter(vol, sigma, mode='nearest')
+    if profile == 'box':
+        for axis, f in enumerate(factor):
+            if f > 1 + 1e-6:
+                vol = ndimage.correlate1d(vol, box_kernel(f), axis=axis, mode='nearest')
+    else:
+        sigma = np.maximum(0.0, (factor - 1) / 2)
+        if np.any(sigma > 0):
+            vol = ndimage.gaussian_filter(vol, sigma, mode='nearest')
     return ndimage.affine_transform(vol, factor, output_shape=grid_shape(vol.shape, spacing, grid),
                                     order=order, mode='nearest')
 
 
-def resample_mask(mask, spacing, grid):
+def profile_for(resolution):
+    return 'box' if split_level(resolution)[1] == 'box' else 'gaussian'
+
+
+def resample_mask(mask, spacing, grid, profile='gaussian'):
     """A mask as it would appear on a coarser grid: partial-volume fraction >= 0.5."""
     if np.allclose(grid, spacing):
         return np.asarray(mask, dtype=bool)
-    return resample(mask, spacing, grid) >= 0.5
+    return resample(mask, spacing, grid, profile=profile) >= 0.5
 
 
 def to_native(mask, spacing, grid, native_shape):
@@ -173,18 +224,22 @@ def to_native(mask, spacing, grid, native_shape):
     return mask[np.ix_(*idx)]
 
 
-def resampled_image(img, grid):
+def resampled_image(img, grid, profile='gaussian', noise_rng=None):
     """A NIfTI image resampled to a coarser grid, with the affine to match.
 
     Each voxel axis of the affine is stretched by its factor and the
     translation is kept, so coarse voxel j lands on the world point of
-    native voxel j * factor.
+    native voxel j * factor. With noise_rng, white noise of NOISE_HU is
+    added to the coarse image.
     """
     import nibabel as nib
     spacing = tuple(float(z) for z in img.header.get_zooms()[:3])
     affine = img.affine.copy()
     affine[:3, :3] = affine[:3, :3] * (np.asarray(grid) / np.asarray(spacing))[None, :]
-    return nib.Nifti1Image(resample(np.asanyarray(img.dataobj), spacing, grid), affine)
+    vol = resample(np.asanyarray(img.dataobj), spacing, grid, profile=profile)
+    if noise_rng is not None:
+        vol += noise_rng.normal(0.0, NOISE_HU, vol.shape).astype(np.float32)
+    return nib.Nifti1Image(vol, affine)
 
 
 def effective_resolution(spacing, resolution):
@@ -214,8 +269,28 @@ def ts_files_for(structure):
 ENGINES = {
     # name: (structures it can segment, or None for any TotalSegmentator class)
     'ts_fast': None,
+    'ts_full': None,
     'classical': ('lungs', 'bone'),
 }
+
+# TotalSegmentator modes. Fast predicts every class with one model at 3 mm.
+# Full predicts at 1.5 mm; with roi_subset it runs only the sub-model that
+# holds the study's structures, on a crop found by the 3 mm model
+# (robust_crop), which is how a single organ is segmented in practice.
+TS_MODES = {
+    'ts_fast': {'fast': True, 'label': '3 mm'},
+    'ts_full': {'fast': False, 'robust_crop': True, 'label': '1.5 mm'},
+}
+
+
+def ts_roi(structures):
+    """TotalSegmentator class names covering the study structures, or None for all."""
+    names = []
+    for s in structures:
+        if s == 'bone':
+            return None
+        names.extend(LUNG_LOBES if s == 'lungs' else (s,))
+    return names
 
 
 def engine_supports(engine, structure):
@@ -236,7 +311,8 @@ def cached_mask_path(dataset, case_id, engine, structure, resolution='native'):
     return os.path.join(cache_dir(dataset, case_id), f'{engine}_{structure}{_suffix(resolution)}.npz')
 
 
-def segment_case(dataset, case, structures, engines, device, resolutions=('native',), log=print):
+def segment_case(dataset, case, structures, engines, device, resolutions=('native',), log=print,
+                 seed=2026):
     """Run each engine once per case and resolution; cache one mask per structure.
 
     Coarser levels segment a resampled copy of the CT, so the engine sees
@@ -244,7 +320,7 @@ def segment_case(dataset, case, structures, engines, device, resolutions=('nativ
     coarse grid. Levels that leave a scan unchanged reuse the native masks.
     """
     import nibabel as nib
-    cid, _, img_path, _ = case
+    cid, number, img_path, _ = case
     img = nib.load(img_path)
     spacing = tuple(float(z) for z in img.header.get_zooms()[:3])
     levels = list(dict.fromkeys(effective_resolution(spacing, r) for r in resolutions))
@@ -261,24 +337,32 @@ def segment_case(dataset, case, structures, engines, device, resolutions=('nativ
             src = img_path
         else:
             t = time.perf_counter()
-            coarse = resampled_image(img, grid)
+            noise = (np.random.default_rng([seed, number, level_index(res)])
+                     if split_level(res)[1] == 'noise' else None)
+            coarse = resampled_image(img, grid, profile_for(res), noise)
             hu = np.asanyarray(coarse.dataobj)
-            src = os.path.join(cache_dir(dataset, cid), f'image{_suffix(res)}.nii.gz')
+            # per process, so engines can run in parallel on the same case
+            src = os.path.join(cache_dir(dataset, cid), f'image{_suffix(res)}.{os.getpid()}.nii.gz')
             nib.save(coarse, src)
             timings[f'resample{_suffix(res)}_s'] = time.perf_counter() - t
         shape = grid_shape(img.shape[:3], spacing, grid)
-        if any(e == 'ts_fast' for e, _ in need):
-            seg_dir = os.path.join(cache_dir(dataset, cid), f'ts_fast_seg{_suffix(res)}')
+        for engine, mode in TS_MODES.items():
+            if not any(e == engine for e, _ in need):
+                continue
+            seg_dir = os.path.join(cache_dir(dataset, cid), f'{engine}_seg{_suffix(res)}')
             if not glob.glob(os.path.join(seg_dir, '*.nii.gz')):
                 from totalsegmentator.python_api import totalsegmentator
+                options = {k: v for k, v in mode.items() if k != 'label'}
+                if not mode['fast']:
+                    options['roi_subset'] = ts_roi(structures)
                 t = time.perf_counter()
-                totalsegmentator(src, seg_dir, fast=True, ml=False, device=device,
-                                 task='total', quiet=True)
-                timings[f'ts_fast{_suffix(res)}_s'] = time.perf_counter() - t
-                log(f'  {cid} [{res}]: TotalSegmentator (3 mm) '
-                    f'{timings[f"ts_fast{_suffix(res)}_s"]:.0f} s on {device}')
+                totalsegmentator(src, seg_dir, ml=False, device=device, task='total', quiet=True,
+                                 **options)
+                timings[f'{engine}{_suffix(res)}_s'] = time.perf_counter() - t
+                log(f'  {cid} [{res}]: TotalSegmentator ({mode["label"]}) '
+                    f'{timings[f"{engine}{_suffix(res)}_s"]:.0f} s on {device}')
             for e, s in need:
-                if e != 'ts_fast':
+                if e != engine:
                     continue
                 keep = ts_files_for(s)
                 mask = np.zeros(shape, dtype=bool)
@@ -320,14 +404,21 @@ CANONICAL = {'blur_mm': 0.0, 'taubin_iter': 0, 'decimation': 0.0}
 # Taubin iterations, decimation), read from segmentation_pipeline.py call sites.
 PRODUCTION = {
     ('ts_fast', None): (0.6, 30, 0.6),      # run_totalseg: build_mesh(sigma=0.6, reduction=0.6)
+    ('ts_full', None): (0.6, 30, 0.6),      # same call site; only the engine mode differs
     ('classical', 'lungs'): (0.7, 30, 0.5),  # run_ct_chest
     ('classical', 'bone'): (0.5, 30, 0.4),   # run_ct_chest
     ('gt', None): (0.6, 30, 0.5),            # build_mesh defaults
 }
 
 
+PRODUCTION_BLUR_MM = 0.5
+
+
 def production_for(source, structure):
     return PRODUCTION.get((source, structure)) or PRODUCTION[(source if source != 'classical' else 'gt', None)]
+
+
+NEW_SOURCES = ('ts_full',)
 
 
 def configs_for(grid_name, source, structure):
@@ -337,6 +428,10 @@ def configs_for(grid_name, source, structure):
     out = [dict(c, config='grid', blur_vox=None) for c in combos]
     b, t, d = production_for(source, structure)
     out.append({'config': 'production', 'blur_mm': None, 'blur_vox': b, 'taubin_iter': t, 'decimation': d})
+    # Production with its blur held in millimetres: the application's 0.6-voxel
+    # blur is about 0.5 mm in-plane at native spacing, but grows with the grid.
+    out.append({'config': 'production_mm', 'blur_mm': PRODUCTION_BLUR_MM, 'blur_vox': None,
+                'taubin_iter': t, 'decimation': d})
     return out
 
 
@@ -377,7 +472,7 @@ def run_unit(task):
             'resolution': resolution, 'resampled': resampled,
             'grid_spacing': 'x'.join(f'{s:g}' for s in grid), 'grid_max_mm': max(grid)}
     if source == 'gt':
-        test = resample_mask(gt, spacing, grid)
+        test = resample_mask(gt, spacing, grid, profile_for(resolution))
     else:
         res = 'native' if not resampled else resolution
         test = np.load(cached_mask_path(dataset, cid, source, structure, res))['mask']
@@ -402,9 +497,11 @@ def run_unit(task):
                                 tuple(float(a) * s for a, s in zip(gt_start, spacing)))
     (test_c,), start = crop_to([test], int(np.ceil(4 + 3 * 1.0 / min(grid))))   # room for 1 mm blur
     origin = tuple(float(a) * s for a, s in zip(start, grid))
-    # Native keeps the seed sequence of the native-only runs, so they reproduce.
-    res_i = list(RESOLUTIONS).index(resolution)
-    stream = [seed, case_i, 0, len(source)] + ([res_i] if res_i else [])
+    # Native keeps the seed sequence of the native-only runs, so they reproduce;
+    # sources added later get their own stream.
+    res_i = level_index(resolution)
+    stream = ([seed, case_i, 0, len(source)] + ([res_i] if res_i else [])
+              + ([100 + NEW_SOURCES.index(source)] if source in NEW_SOURCES else []))
     iso_cache = {}
     for cfg_i, cfg in enumerate(configs_for(grid_name, source, structure)):
         row = dict(base, level='mesh', config=cfg['config'],
@@ -435,20 +532,57 @@ PRESETS = {
     'smoke': {'cases': 1, 'grid': 'canonical', 'samples': 4000, 'resolutions': ('native', 'iso3')},
     'pilot': {'cases': 5, 'grid': 'pilot', 'samples': 20000, 'resolutions': tuple(RESOLUTIONS)},
     'full': {'cases': None, 'grid': 'full', 'samples': 20000, 'resolutions': tuple(RESOLUTIONS)},
+    # Coarsening-model sensitivity: canonical and production meshes only.
+    'sensitivity': {'cases': None, 'grid': 'canonical', 'samples': 20000,
+                    'resolutions': ('iso3~box', 'slice5~box', 'iso3~noise', 'slice5~noise')},
 }
+
+
+def resume_rows(path, grid):
+    """Rows of the complete units in an interrupted run's partial.jsonl.
+
+    A unit (case, structure, source, level) is complete when all its mesh
+    rows were written; partial units and a cut-off last line are dropped,
+    and the file is rewritten with the complete units only. Returns
+    (rows, set of complete unit keys).
+    """
+    if not os.path.exists(path):
+        return [], set()
+    units = {}
+    with open(path, encoding='utf-8') as fh:
+        for line in fh:
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            units.setdefault((r['case'], r['structure'], r['source'], r['resolution']), []).append(r)
+    done = {}
+    for key, rs in units.items():
+        meshes = sum(r.get('level') == 'mesh' for r in rs)
+        if meshes == len(configs_for(grid, key[2], key[1])) or any(r.get('status') == 'empty_mask' for r in rs):
+            done[key] = rs
+    rows = [r for rs in done.values() for r in rs]
+    with open(path, 'w', encoding='utf-8') as fh:
+        for r in rows:
+            fh.write(json.dumps(r, default=str) + '\n')
+    return rows, set(done)
 
 
 def run_experiment(dataset, data_root, preset='pilot', engines=('ts_fast', 'classical'),
                    workers=None, seed=2026, tol_mm=1.0, outdir=None, max_cases=None,
-                   resolutions=None, log=print):
+                   resolutions=None, log=print, sample=None, segment_only=False):
     from research.phantom_experiment import _provenance
     meta, cfg = DATASETS[dataset], PRESETS[preset]
     cases = list_cases(dataset, data_root)
     limit = max_cases or cfg['cases']
     cases = cases[:limit] if limit else cases
+    if sample and sample < len(cases):
+        # A seeded random subset, drawn before anything is measured.
+        keep = np.sort(np.random.default_rng(seed).choice(len(cases), sample, replace=False))
+        cases = [cases[i] for i in keep]
     structures = list(meta['structures'])
     engines = [e for e in engines if any(engine_supports(e, s) for s in structures)]
-    resolutions = [r for r in RESOLUTIONS if r in (resolutions or cfg['resolutions'])]
+    resolutions = sorted(dict.fromkeys(resolutions or cfg['resolutions']), key=level_index)
 
     try:
         import torch
@@ -460,7 +594,10 @@ def run_experiment(dataset, data_root, preset='pilot', engines=('ts_fast', 'clas
     log(f'Segmenting {len(cases)} case(s) with {", ".join(engines) or "no engines"} '
         f'at {", ".join(resolutions)} ({device})...')
     for case in cases:
-        seg_timings[case[0]] = segment_case(dataset, case, structures, engines, device, resolutions, log)
+        seg_timings[case[0]] = segment_case(dataset, case, structures, engines, device, resolutions, log,
+                                            seed)
+    if segment_only:
+        return None, []
 
     tasks = []
     for case_i, (cid, num, _, lbl) in enumerate(cases):
@@ -475,7 +612,12 @@ def run_experiment(dataset, data_root, preset='pilot', engines=('ts_fast', 'clas
     out_root = os.environ.get('VRSEG_OUTPUT') or os.path.join(ROOT, 'output')
     outdir = outdir or os.path.join(out_root, 'research', 'tier2', run_id)
     os.makedirs(outdir, exist_ok=True)
-    # Rows are also appended unit by unit, so an interrupted run keeps its work.
+    # Rows are also appended unit by unit, so an interrupted run keeps its work;
+    # passing its folder as outdir resumes it from the units already complete.
+    rows, resumed = resume_rows(os.path.join(outdir, 'partial.jsonl'), grid=cfg['grid'])
+    if resumed:
+        tasks = [t for t in tasks if (t[1], t[3], t[5], t[11]) not in resumed]
+        log(f'Resuming: {len(resumed)} units already scored')
     partial = open(os.path.join(outdir, 'partial.jsonl'), 'a', encoding='utf-8')
 
     def collect(unit_rows):
@@ -485,7 +627,6 @@ def run_experiment(dataset, data_root, preset='pilot', engines=('ts_fast', 'clas
         partial.flush()
 
     workers = workers or max(1, (os.cpu_count() or 2) - 1)
-    rows = []
     log(f'Reconstructing and scoring: {len(tasks)} units on {workers} worker(s) -> {outdir}')
     with partial:
         if workers == 1:
@@ -499,7 +640,7 @@ def run_experiment(dataset, data_root, preset='pilot', engines=('ts_fast', 'clas
                     log(f'  unit {done}/{len(tasks)} done')
     wall = time.perf_counter() - t_start
 
-    rows.sort(key=lambda r: (r['structure'], r['case'], list(RESOLUTIONS).index(r['resolution']),
+    rows.sort(key=lambda r: (r['structure'], r['case'], level_index(r['resolution']),
                              r['source'], str(r.get('config'))))
     fields = []
     for r in rows:
@@ -521,14 +662,19 @@ def run_experiment(dataset, data_root, preset='pilot', engines=('ts_fast', 'clas
         'isosurface': 'lewiner (fixed: Tier 1 found it explained 0.0% of variance)',
         'canonical': CANONICAL, 'production': {f'{k[0]}/{k[1] or "default"}': v for k, v in PRODUCTION.items()},
         'reference_surface': 'canonical reconstruction of the expert mask at native spacing',
-        'resolutions': {r: RESOLUTIONS[r] for r in resolutions},
+        'resolutions': {r: RESOLUTIONS[split_level(r)[0]] for r in resolutions},
+        'coarsening_variants': {'box': 'rectangular slice profile one coarse voxel wide',
+                                'noise': f'Gaussian profile plus white noise, SD {NOISE_HU:g} HU, on the CT'},
+        'case_sample': sample,
+        'ts_modes': {k: {a: b for a, b in v.items() if a != 'label'} for k, v in TS_MODES.items()},
         'resolution_rule': ('minimum spacing (in-plane mm, slice mm); coarsen only; CT and expert '
                             'mask resampled with Gaussian anti-aliasing (sigma = (factor - 1) / 2 '
                             'voxels) and linear interpolation, mask thresholded at 0.5; engine '
                             'masks scored at mask level after nearest-neighbour mapping to native'),
         'samples_per_side': cfg['samples'], 'nsd_tolerance_mm': tol_mm, 'segmentation_device': device,
         'segmentation_timings_s': seg_timings, 'totalsegmentator_version': ts_version,
-        'rows': len(rows), 'units': len(tasks), 'workers': workers, 'wall_time_s': round(wall, 1),
+        'rows': len(rows), 'units': len(tasks) + len(resumed), 'resumed_units': len(resumed),
+        'workers': workers, 'wall_time_s': round(wall, 1),
         **_provenance(),
     }
     with open(os.path.join(outdir, 'run.json'), 'w', encoding='utf-8') as fh:
@@ -567,7 +713,7 @@ def summarise(rows, run):
     df = pd.DataFrame(rows)
     if 'resolution' not in df:                       # runs from before Exp. D
         df['resolution'], df['resampled'] = 'native', False
-    order = [r for r in RESOLUTIONS if r in set(df['resolution'])]
+    order = sorted(set(df['resolution']), key=level_index)
     df['resolution'] = pd.Categorical(df['resolution'], categories=order, ordered=True)
     df['resampled'] = df['resampled'].astype(str).str.lower() == 'true'
     info = run['dataset_info']
@@ -589,7 +735,7 @@ def summarise(rows, run):
                   '| resolution | minimum spacing (mm) | cases resampled | largest grid spacing (median, mm) |',
                   '|---|---|---|---|']
         for r, g in per_case.groupby('resolution', observed=True):
-            inplane, slice_mm = RESOLUTIONS[r]
+            inplane, slice_mm = RESOLUTIONS[split_level(r)[0]]
             rule = 'as acquired' if r == 'native' else (
                 f'{inplane:g} in-plane, {slice_mm:g} slice' if inplane else f'native in-plane, {slice_mm:g} slice')
             lines.append(f"| {r} | {rule} | {int(g['resampled'].sum())}/{len(g)} | {g['grid_max_mm'].median():g} |")
@@ -679,6 +825,8 @@ def main():
     ap.add_argument('--preset', choices=sorted(PRESETS), default='pilot')
     ap.add_argument('--engines', default='ts_fast,classical')
     ap.add_argument('--cases', type=int, default=None, help='use only the first N cases')
+    ap.add_argument('--sample', type=int, default=None, help='use a seeded random subset of N cases')
+    ap.add_argument('--segment-only', action='store_true', help='run and cache the engines, then stop')
     ap.add_argument('--resolutions', default=None,
                     help=f'comma-separated subset of {",".join(RESOLUTIONS)} (default: the preset\'s)')
     ap.add_argument('--workers', type=int, default=None)
@@ -699,14 +847,16 @@ def main():
     if not (args.dataset and args.data):
         ap.error('--dataset and --data are required')
     resolutions = tuple(r for r in (args.resolutions or '').split(',') if r) or None
-    unknown = set(resolutions or ()) - set(RESOLUTIONS)
-    if unknown:
-        ap.error(f'unknown resolution(s): {", ".join(sorted(unknown))}')
+    for r in resolutions or ():
+        try:
+            split_level(r)
+        except ValueError as exc:
+            ap.error(str(exc))
     outdir, rows = run_experiment(args.dataset, args.data, args.preset,
                                   tuple(e for e in args.engines.split(',') if e),
                                   args.workers, args.seed, args.tol, args.outdir, args.cases,
-                                  resolutions)
-    print(f'{len(rows)} rows -> {outdir}')
+                                  resolutions, sample=args.sample, segment_only=args.segment_only)
+    print('engines cached' if args.segment_only else f'{len(rows)} rows -> {outdir}')
 
 
 if __name__ == '__main__':

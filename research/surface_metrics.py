@@ -11,6 +11,11 @@ Definitions (all in mm unless stated):
   HD95       max of the two directed 95th percentiles (MONAI convention)
   Hausdorff  max distance in either direction
   NSD        surface Dice at tolerance tol: share of both samples within tol
+             (Tier 2 also reports 0.5 and 2 mm, and the 99th percentile)
+  defect     on the test mesh, faces whose three vertices all lie farther
+             than DEFECT_MM from the reference: their share of the area and
+             the area of the largest connected patch (local errors that a
+             global mean hides)
   mean_signed  mean SDF over the mesh; < 0 means the mesh sits inside the
                true surface on average (shrinkage), > 0 means expansion
 
@@ -123,14 +128,39 @@ def signed_distance_to_mesh(points, verts, faces):
     return d if signed_volume(verts, faces) >= 0 else -d
 
 
+DEFECT_MM = 2.0
+
+
+def defect_patches(verts, faces, ref_verts, ref_faces, tau=DEFECT_MM):
+    """(largest patch area in mm2, area share) of faces farther than tau from the reference.
+
+    A face is displaced when its three vertices are; displaced faces that
+    share a vertex form one patch.
+    """
+    d, _ = point_to_mesh_distance(verts, ref_verts, ref_faces)
+    bad = (d[faces] > tau).all(axis=1)
+    if not bad.any():
+        return 0.0, 0.0
+    areas = triangle_areas(verts, faces)
+    f = faces[bad]
+    n = len(f)
+    incidence = coo_matrix((np.ones(3 * n), (np.repeat(np.arange(n), 3), f.ravel())),
+                           shape=(n, len(verts))).tocsr()
+    _, label = connected_components(incidence @ incidence.T, directed=False)
+    patch = np.bincount(label, weights=areas[bad])
+    return float(patch.max()), float(areas[bad].sum() / areas.sum())
+
+
 def compare_meshes(test_verts, test_faces, ref_verts, ref_faces, rng,
-                   n_samples=20_000, tol_mm=1.0):
+                   n_samples=20_000, tol_mm=1.0, local=True):
     """Tier 2 metrics for a test mesh against a reference mesh.
 
     Same definitions as compare_to_phantom, with the reference surface in
     place of the analytic one: distances in both directions are exact
     point-to-triangle distances (VTK). mean_signed_mm > 0 means the test
-    mesh lies outside the reference on average (expansion).
+    mesh lies outside the reference on average (expansion). local=False
+    skips the per-vertex defect patches (NaN), the costliest part, for
+    quick checks such as the app's accuracy estimate.
     """
     test_pts = sample_mesh_surface(test_verts, test_faces, n_samples, rng)
     ref_pts = sample_mesh_surface(ref_verts, ref_faces, n_samples, rng)
@@ -141,11 +171,19 @@ def compare_meshes(test_verts, test_faces, ref_verts, ref_faces, rng,
     topo = mesh_topology(test_faces)
     ref_vol, ref_area = mesh_volume(ref_verts, ref_faces), mesh_area(ref_verts, ref_faces)
     vol, area = mesh_volume(test_verts, test_faces), mesh_area(test_verts, test_faces)
+    patch_mm2, defect_share = (defect_patches(test_verts, test_faces, ref_verts, ref_faces) if local
+                               else (float('nan'), float('nan')))
     return {
         'assd_mm': float(both.mean()),
         'hd95_mm': float(max(np.percentile(d_test, 95), np.percentile(d_ref, 95))),
         'hausdorff_mm': float(max(d_test.max(), d_ref.max())),
         'nsd': float((both <= tol_mm).mean()),
+        'nsd_0.5mm': float((both <= 0.5).mean()),
+        'nsd_2mm': float((both <= 2.0).mean()),
+        'p99_mm': float(max(np.percentile(d_test, 99), np.percentile(d_ref, 99))),
+        'defect_patch_mm2': patch_mm2,
+        'defect_area_pct': 100 * defect_share,
+        'missed_ref_pct': float(100 * (d_ref > DEFECT_MM).mean()),
         'mean_signed_mm': float(signed.mean()),
         'volume_err_pct': float((vol - ref_vol) / ref_vol * 100) if ref_vol else float('nan'),
         'area_err_pct': float((area - ref_area) / ref_area * 100) if ref_area else float('nan'),

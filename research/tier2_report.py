@@ -22,13 +22,19 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from research.tier2 import RESOLUTIONS, eta_squared, results_file  # noqa: E402
+from research.tier2 import RESOLUTIONS, eta_squared, level_index, results_file, split_level  # noqa: E402
 
 # MEDSYS palette: dark text for native, anatomy colours for the coarser levels.
 COLOURS = {'native': '#1F2933', 'iso1.5': '#4F91D9', 'iso3': '#FF7A18', 'slice5': '#2A9D8F'}
-SOURCES = {'gt': 'Expert mask', 'ts_fast': 'TotalSegmentator fast', 'classical': 'Classical'}
+SOURCES = {'gt': 'Expert mask', 'ts_fast': 'TotalSegmentator fast', 'ts_full': 'TotalSegmentator full',
+           'classical': 'Classical'}
 TEXT, TEXT2, RULE = '#1F2933', '#667085', '#D0D5DD'
 CONFIGS = (('canonical', 'Canonical'), ('production', 'Production'))
+
+
+def colour(level):
+    """Coarsening variants share their base level's colour."""
+    return COLOURS[split_level(level)[0]]
 
 
 # ── data ─────────────────────────────────────────────────────────────────
@@ -49,7 +55,7 @@ def load(run_dir):
     # Sampling added by coarsening, in quadrature: sqrt(mean over axes of s'^2 - s^2).
     # Equals the spacing h when an isotropic grid h replaces an infinitely fine one.
     df['added_mm'] = np.sqrt(np.clip(grid ** 2 - native ** 2, 0, None).mean(axis=1))
-    order = [r for r in RESOLUTIONS if r in set(df['resolution'])]
+    order = sorted(set(df['resolution']), key=level_index)
     df['resolution'] = pd.Categorical(df['resolution'], categories=order, ordered=True)
     df['cfg'] = np.where(df['config'] == 'production', 'production',
                          np.where(df['is_canonical'], 'canonical', df['config']))
@@ -120,7 +126,7 @@ def tables(df, run, out, baseline=None):
     for r in order:
         g = per[per['resolution'] == r]
         sp = g['grid_spacing'].str.split('x', expand=True).astype(float)
-        inplane, slice_mm = RESOLUTIONS[r]
+        inplane, slice_mm = RESOLUTIONS[split_level(r)[0]]
         rule = 'as acquired' if r == 'native' else (
             f'$\\geq${inplane:g}\\,mm in-plane, $\\geq${slice_mm:g}\\,mm slice' if inplane
             else f'native in-plane, $\\geq${slice_mm:g}\\,mm slice')
@@ -193,7 +199,7 @@ def tables(df, run, out, baseline=None):
         rows.append([names[f]] + [('--' if f not in c else f'{100 * c[f]:.1f}\\%') for c in cols])
     rows.append(None)
     rows.append(['Interactions + residual'] + [f'{100 * (1 - sum(c.values())):.1f}\\%' for c in cols])
-    short = {'gt': 'Expert', 'ts_fast': 'TotalSeg.', 'classical': 'Classical'}
+    short = {'gt': 'Expert', 'ts_fast': 'TS fast', 'ts_full': 'TS full', 'classical': 'Classical'}
     header = (['Factor', 'All'] + [short[s] for s in sources]
               + [short[s] + (' (coarse)' if s == 'gt' else '') for s in log_sel])
     n1, n2 = len(sel), len(log_sel)
@@ -386,7 +392,7 @@ def figures(df, out):
                     if len(v):
                         data.append(v.to_numpy())
                         pos.append(i + off)
-                        col.append(COLOURS[r])
+                        col.append(colour(r))
                 if data:
                     _strip(ax, data, pos, col, rng, filled=filled)
             if metric == 'mean_signed_mm':
@@ -411,13 +417,13 @@ def figures(df, out):
             if len(v):
                 data.append(v.to_numpy())
                 pos.append(i + (k - (len(sources) - 1) / 2) * width)
-                col.append(COLOURS[r])
+                col.append(colour(r))
         if data:
             _strip(ax, data, pos, col, rng, filled=(src != 'gt'), width=width * 0.8)
     ax.set_xticks(x, order)
     ax.set_ylabel('Dice against expert mask')
     ax.legend(handles=[Patch(facecolor='white', edgecolor=TEXT2, label='Expert mask, resampled (sampling only)'),
-                       Patch(facecolor=TEXT2, label='TotalSegmentator fast')],
+                       Patch(facecolor=TEXT2, label=', '.join(SOURCES[s] for s in sources if s != 'gt'))],
               loc='lower left', frameon=False)
     fig.tight_layout()
     _save(fig, out, 'dice_by_resolution')
@@ -431,7 +437,7 @@ def figures(df, out):
             g = floor[floor['resolution'] == r]
             if not len(g):
                 continue
-            ax.scatter(g['added_mm'], g['assd_mm'], s=10, color=COLOURS[r], label=r, alpha=0.8, linewidths=0)
+            ax.scatter(g['added_mm'], g['assd_mm'], s=10, color=colour(r), label=r, alpha=0.8, linewidths=0)
         xs = np.linspace(0, floor['added_mm'].max() * 1.05, 50)
         xv, yv = floor['added_mm'].to_numpy(), floor['assd_mm'].to_numpy()
         slope = (xv @ yv) / (xv @ xv)
@@ -457,7 +463,7 @@ def figures(df, out):
             if not len(g):
                 continue
             s = g.groupby('taubin_iter')['assd_mm'].agg(['mean', 'sem'])
-            ax.errorbar(s.index, s['mean'], yerr=1.96 * s['sem'], color=COLOURS[r], marker='o', markersize=3,
+            ax.errorbar(s.index, s['mean'], yerr=1.96 * s['sem'], color=colour(r), marker='o', markersize=3,
                         linewidth=1.1, capsize=2, label=r)
         ax.set_title(SOURCES[src], loc='left')
         ax.set_xlabel('Taubin iterations')
@@ -499,7 +505,7 @@ def figures(df, out):
             if not len(g):
                 continue
             rate = g.groupby('decimation')['topology_ok'].mean() * 100
-            ax.plot(rate.index, rate.values, marker='o', markersize=3, color=COLOURS[r], linewidth=1.1, label=r)
+            ax.plot(rate.index, rate.values, marker='o', markersize=3, color=colour(r), linewidth=1.1, label=r)
         ax.set_title(SOURCES[src], loc='left')
         ax.set_xlabel('Decimation (fraction of faces removed)')
         ax.set_xticks(sorted(g0['decimation'].unique()))
