@@ -97,7 +97,7 @@ def run_case(dataset, cid, case_i, image, label, args, tmp, log):
     structure, values = next(iter(tier2.DATASETS[dataset]['structures'].items()))
     lab = nib.load(label)
     spacing = tuple(float(z) for z in lab.header.get_zooms()[:3])
-    gt = np.isin(np.asanyarray(lab.dataobj).astype(np.int16), values)
+    gt = np.isin(np.rint(np.asanyarray(lab.dataobj)).astype(np.int16), values)
     (gt_c,), st = tier2.crop_to([gt], 6)
     rv, rf = extract_isosurface(gt_c, spacing, ReconParams(), tuple(float(a) * s for a, s in zip(st, spacing)))
     rows = []

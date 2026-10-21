@@ -78,6 +78,16 @@ DATASETS = {
         'structures': {'liver': (1,), 'lungs': (3,), 'bone': (5,)},
         'manual_cases': {'lungs': range(0, 21), 'bone': range(0, 21)},
     },
+    'amos': {
+        'title': 'AMOS 2022, CT scans of the labelled training and validation splits',
+        'licence': 'CC BY 4.0 (Zenodo record 7262581)',
+        'labels': ('manual annotation of 15 abdominal organs in every case, from multiple centres and vendors; '
+                   'only the CT scans (ids below 500) are used'),
+        # study structure = TotalSegmentator class name: label value(s) in AMOS
+        'structures': {'spleen': (1,), 'pancreas': (10,), 'liver': (6,), 'aorta': (8,),
+                       'inferior_vena_cava': (9,)},
+        'manual_cases': {},
+    },
 }
 
 
@@ -107,6 +117,17 @@ def list_cases(dataset, root):
                 lbl = hits[0] if hits else None
             if lbl:
                 out.append((f'ctorg_{n:03d}', n, img, lbl))
+        return sorted(out, key=lambda c: c[1])
+    if dataset == 'amos':
+        with open(os.path.join(root, 'dataset.json'), encoding='utf-8') as fh:
+            meta = json.load(fh)
+        out = []
+        for item in meta['training'] + meta.get('validation', []):
+            img = os.path.normpath(os.path.join(root, item['image']))
+            lbl = os.path.normpath(os.path.join(root, item['label']))
+            n = int(re.findall(r'\d+', os.path.basename(img))[-1])
+            if n < 500 and os.path.exists(img) and os.path.exists(lbl):     # 500 and above are MRI
+                out.append((f'amos_{n:04d}', n, img, lbl))
         return sorted(out, key=lambda c: c[1])
     raise ValueError(f'unknown dataset {dataset!r}')
 
@@ -464,13 +485,17 @@ def run_unit(task):
      seed, n_samples, tol_mm, case_i, resolution) = task
     lab = nib.load(label_path)
     spacing = tuple(float(z) for z in lab.header.get_zooms()[:3])
-    gt = np.isin(np.asanyarray(lab.dataobj).astype(np.int16), label_values)
+    gt = np.isin(np.rint(np.asanyarray(lab.dataobj)).astype(np.int16), label_values)
     grid = grid_spacing(spacing, resolution)
     resampled = effective_resolution(spacing, resolution) != 'native'
     base = {'dataset': dataset, 'case': cid, 'structure': structure, 'source': source,
             'spacing': 'x'.join(f'{s:g}' for s in spacing), 'slice_mm': max(spacing),
             'resolution': resolution, 'resampled': resampled,
             'grid_spacing': 'x'.join(f'{s:g}' for s in grid), 'grid_max_mm': max(grid)}
+    if not gt.any():
+        # The structure is not in this scan's field of view (e.g. no lungs on an
+        # abdominal CT), so there is nothing to score against.
+        return [dict(base, level='mask', status='no_reference')]
     if source == 'gt':
         test = resample_mask(gt, spacing, grid, profile_for(resolution))
     else:
@@ -559,7 +584,7 @@ def resume_rows(path, grid):
     done = {}
     for key, rs in units.items():
         meshes = sum(r.get('level') == 'mesh' for r in rs)
-        if meshes == len(configs_for(grid, key[2], key[1])) or any(r.get('status') == 'empty_mask' for r in rs):
+        if meshes == len(configs_for(grid, key[2], key[1])) or any(r.get('status') in ('empty_mask', 'no_reference') for r in rs):
             done[key] = rs
     rows = [r for rs in done.values() for r in rs]
     with open(path, 'w', encoding='utf-8') as fh:

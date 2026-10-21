@@ -72,11 +72,13 @@ def run_case(task):
     from research.surface_metrics import compare_meshes
     from segmentation_pipeline import build_mesh
     config.ACCURACY = True
-    dataset, cid, case_i, label_path, seed = task
-    structure, values = next(iter(tier2.DATASETS[dataset]['structures'].items()))
+    dataset, cid, case_i, label_path, seed = task[:5]
+    structures = tier2.DATASETS[dataset]['structures']
+    structure = task[5] if len(task) > 5 else next(iter(structures))     # one organ per task
+    values = structures[structure]
     lab = nib.load(label_path)
     spacing = tuple(float(z) for z in lab.header.get_zooms()[:3])
-    gt = np.isin(np.asanyarray(lab.dataobj).astype(np.int16), values)
+    gt = np.isin(np.rint(np.asanyarray(lab.dataobj)).astype(np.int16), values)
     (gt_c,), gt_start = tier2.crop_to([gt], 6)
     rv, rf = extract_isosurface(gt_c, spacing, ReconParams(),          # the reference surface
                                 tuple(float(a) * s for a, s in zip(gt_start, spacing)))
@@ -132,6 +134,7 @@ def run_case(task):
                 card_watertight=bool(card['watertight']), card_pieces=int(card['pieces']),
                 card_engine_level=ref['level'], card_engine_median_mm=ref['median_mm'],
                 card_engine_q1_mm=ref['iqr_mm'][0], card_engine_q3_mm=ref['iqr_mm'][1],
+                card_engine_p5_mm=ref['range90_mm'][0], card_engine_p95_mm=ref['range90_mm'][1],
                 independent_manifold=_vtk_closed(mesh),
                 true_assd_mm=true['assd_mm'], true_hd95_mm=true['hd95_mm'],
                 true_signed_mm=true['mean_signed_mm'], true_volume_err_pct=true['volume_err_pct'],
