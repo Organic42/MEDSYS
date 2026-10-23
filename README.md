@@ -25,7 +25,7 @@ that measures how far those models can be trusted.
 [![Paper](https://img.shields.io/badge/paper-v1.0--paper-orange.svg)](https://github.com/Organic42/MEDSYS/releases/tag/v1.0-paper)
 [![Status: research prototype](https://img.shields.io/badge/status-research%20prototype-lightgrey.svg)](#status)
 
-[Product](#the-product) · [Results](#research-results) · [Paper](#paper) · [Reproduce](#reproducing-the-results) · [Run it](#running-medsys) · [Roadmap](#roadmap) · [Cite](#citation)
+[Product](#the-product) · [Results](#research-results) · [Validation](#validation) · [Paper](#paper) · [Reproduce](#reproducing-the-results) · [Run it](#running-medsys) · [Roadmap](#roadmap) · [Cite](#citation)
 
 <br>
 
@@ -44,13 +44,14 @@ that measures how far those models can be trusted.
 
 | | |
 |---|---|
-| **23,832** | meshes scored against exact or expert reference surfaces |
-| **41** | expert-labelled CT scans, each resampled to 4 acquisition resolutions |
-| **0.177 mm** | surface error added per mm of lost sampling (95% CI 0.171–0.184) |
-| **89.5%** | of an AI engine's surface-error variance that is patient-to-patient |
-| **66% → 95%** | closed meshes when TotalSegmentator output is meshed on its own 3 mm grid |
-| **17.7×** | GPU speed-up of MedSAM refinement (432.8 s → 24.5 s) |
-| **91** | automated tests |
+| **57,944** | meshes scored against exact or expert reference surfaces |
+| **82** | expert-labelled CT scans (41 spleen, 41 pancreas held out), each resampled to 4 acquisition resolutions |
+| **0.177 mm** | surface error added per mm of lost sampling (95% CI 0.171–0.184); predicts the held-out pancreas within 0.030 mm |
+| **0.76–0.90 mm** | average distance of a finished spleen model from the expert's outline |
+| **89.5% / 99.9%** | of an AI engine's surface-error variance that is patient-to-patient (spleen / pancreas) |
+| **590** | of the app's own meshes used to check its per-mesh accuracy estimate |
+| **28.7 s → 5.3 s** | TotalSegmentator time per CT scan with the persistent GPU worker |
+| **118** | automated tests |
 
 ## The product
 
@@ -68,7 +69,12 @@ Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segment
 | **Workbench** | Dataset, structures and pipeline on the left; a 3D stage with surface, wireframe and X-ray modes in the centre; mesh checks, the accuracy estimate and reference metrics on the right |
 | **Measured, not guessed** | Mesh checks show real structural data (on the CT above: 46 of 79 meshes closed, 43 of 79 in one piece, 58 of 79 manifold, 817,158 triangles). The accuracy estimate gives every mesh the error its voxel spacing alone imposes, measures how far smoothing and simplification moved it, and shows the engine's error against expert labels where the study measured it (TotalSegmentator on spleen and pancreas), saying "not validated" everywhere else. Each line was checked against the true error of 590 of the app's own meshes ([validation report](docs/validation/validation-report.pdf)) |
 | **Neuroplasticity Explorer** | Questions about behaviour and the brain, answered from a curated evidence base and mapped onto a 3D brain |
-| **Deployment** | Docker Compose (API, Redis and workers), a lightweight Hugging Face Spaces image, and a standalone Windows build |
+| **Speed** | A persistent GPU worker keeps TotalSegmentator and MedSAM loaded between jobs: 5.3 s instead of 28.7 s of segmentation per CT scan, 52 s instead of 75 s for the whole job |
+| **Deployment** | Docker Compose (API, Redis and workers), a lightweight Hugging Face Spaces image with a public demo mode, and a standalone Windows build |
+
+<img src="docs/images/workbench-accuracy.jpg" alt="MEDSYS workbench on a public chest CT with 79 structures, mesh checks and the accuracy estimate card on the right" width="100%">
+
+<sub>The current workbench on a public chest CT (TCIA sample): the accuracy estimate card on the right shows the resolution limit, the smoothing shift, the engine's validated error and the watertight count.</sub>
 
 <img src="docs/images/explorer.png" alt="Neuroplasticity Explorer answering how regular exercise changes the brain, with four highlighted regions and their evidence" width="100%">
 
@@ -83,7 +89,7 @@ stages interact. The thesis is **measure → predict → decide**:
 
 | | Question | Status |
 |---|---|---|
-| **RQ1 — Measure** | Which pipeline stages, and which interactions between them, contribute most to final geometric error? | Phantoms and 41 expert-labelled CT scans done; a second dataset (CT-ORG) next |
+| **RQ1 — Measure** | Which pipeline stages, and which interactions between them, contribute most to final geometric error? | Done on phantoms, 41 spleen and 41 held-out pancreas scans, both engine modes; external pilot on AMOS and CT-ORG |
 | **RQ2 — Predict** | Can final-mesh error be predicted without ground truth, with calibrated coverage? | Planned |
 | **RQ3 — Decide** | Can those predictions select the cheapest pipeline that meets a task's accuracy requirement? | Planned |
 
@@ -96,15 +102,17 @@ so every result below describes the meshes the app actually ships.
 
 Two references, one factorial design. **Tier 1** reconstructs four analytic phantoms (sphere, thin
 capsule, torus, rounded box) at four voxel spacings under 97 configurations, 7,760 meshes, and
-scores them against their exact surfaces. **Tier 2** resamples 41 expert-labelled spleen CT scans
-(Medical Segmentation Decathlon) to four resolution levels *before* segmentation, segments them
-with TotalSegmentator, and reconstructs both the expert mask and the engine's mask under 49
-configurations, 16,072 meshes, scored against the expert surface.
+scores them against their exact surfaces. **Tier 2** resamples expert-labelled CT (Medical
+Segmentation Decathlon: 41 spleen scans, and 41 pancreas scans held out with six hypotheses fixed
+before any was processed) to four resolution levels *before* segmentation, segments them with
+TotalSegmentator in fast (3 mm) and full (1.5 mm) mode, and reconstructs both the expert mask and
+the engine's mask under 49 configurations: 49,200 meshes, plus coarsening-sensitivity runs, 57,944
+in total.
 
 ### Tier 2: what resolution does to a correct segmentation and to an AI engine
 
-Mean across scans; distances are ASSD in mm against the expert reference surface; `slice5` covers
-the 14 scans it actually resampled.
+Spleen, TotalSegmentator fast mode. Mean across scans; distances are ASSD in mm against the expert
+reference surface; `slice5` covers the 14 scans it actually resampled.
 
 | Source | Resolution | Dice | ASSD, canonical | ASSD, production | Closed meshes |
 |---|---|---|---|---|---|
@@ -139,6 +147,20 @@ the 14 scans it actually resampled.
 - **A practical fix.** Meshing TotalSegmentator's output on its own 3 mm grid raises closed meshes
   from 66% to 95% and cuts the median mesh from 19,520 to 2,600 faces. At identical physical
   settings, the accuracy change is negligible (−0.017 mm); the gain is topology and size.
+
+### Held-out organ and full-resolution mode
+
+| | Spleen | Pancreas (held out) |
+|---|---|---|
+| Engine ASSD at native resolution, fast / full mode | 0.901 / 0.790 mm | 2.722 / 3.021 mm |
+| Share of engine error variance from the scan | 89.5% | 99.9% |
+| Sampling relationship (slope) | 0.177 (the fit) | 0.180; spleen fit predicts it within 0.030 mm |
+
+Of the six hypotheses fixed from the spleen before any pancreas scan was processed, four held,
+one held partly (meshing on the engine's grid again closed 25 points more meshes, but cost
+0.085 mm) and one did not (a 3 mm grid raised the pancreas error by 0.120 mm, beyond the ±0.10 mm
+margin). Full mode is better on native spleen scans but loses 0.42 mm on 3 mm input and does not
+help the pancreas. Much of the pancreas error is tumour the engine leaves out.
 
 ### Tier 1: reconstruction error against exact surfaces
 
@@ -181,13 +203,39 @@ runs that work in-process. On a 64-slice chest CT:
 The masks match TotalSegmentator's own output to within its run-to-run variation (nnU-Net uses
 cuDNN autotuning, so two processes can differ in a few hundred of 2.3 million voxels).
 
+## Validation
+
+The research measures the method; these tests check what the application itself delivers. Full
+report: [`docs/validation/validation-report.pdf`](docs/validation/validation-report.pdf).
+
+| Test | Question | What was done | Result |
+|---|---|---|---|
+| 1 · Accuracy estimate ([`card_validation.py`](research/card_validation.py)) | Is the accuracy the app shows honest? | The app's own meshing code on all 82 scans, both modes and 4 grids (590 meshes); each line of the estimate compared with the true error, leave one scan out. About 4 min | Resolution limit inside its interval for 98% of held-out pancreas grids; smoothing shift correct to 0.022 mm; watertight flag right for 590 of 590. The engine figure was overconfident on coarse grids (as low as 15% in its middle half); fixed, it holds 50% and 86% in its 9-in-10 range (targets 50% and 90%) |
+| 2 · Repeatability ([`repeatability.py`](research/repeatability.py)) | Does the same scan always give the same model? | 10 scans, 184 runs: persistent GPU worker, a new GPU process each run, and the CPU. About 2 h | Identical masks in all 80 repeats on the worker; a new process or the CPU changed at most 96 organ voxels and moved the mesh by at most 0.025 mm |
+| 3 · Printed phantom ([`physical_phantom.py`](research/physical_phantom.py)) | Is it accurate on a real object? | Seven printable shapes with exact surfaces (sphere, box, torus, 2/4/6 mm tubes, a bifurcation), a print-and-scan [protocol](docs/validation/phantom/README.md) and an analysis tested on simulated CT | Ready; awaiting a CT scanner session |
+| 4 · New hospitals ([`card_external.py`](research/card_external.py)) | Does it hold on data from other centres? | Pilot on 5 AMOS and 5 CT-ORG scans (liver, spleen, pancreas, aorta, vena cava, lungs, bone). About 1 h | Resolution limit and watertight flag transfer; the engine figure is optimistic at the new centre (spleen about 1.2 mm against 0.8 mm stated). Full run next |
+
+**Fixed because of the tests:** the engine figure now uses the reference measured on the study
+grid closest to the scan; the resolution range's lower bound moved from 0.14 to 0.13; the
+repeat-check no longer treats two blank values as different; label values are rounded before use
+(CT-ORG stores them as floats just below the integer); structures outside a scan's field of view
+are recorded instead of stopping a run; and MSD Task08 hepatic vessels was dropped as test data,
+because TotalSegmentator's own liver-vessel model is trained on it.
+
+**How accurate is a model?** About 0.1 voxel against the scan itself (the meshing step), 0.76 to
+0.90 mm against an expert's outline for the spleen and about 2 mm for the pancreas, and not yet
+measured against the real organ (test 3).
+
 ## Paper
 
 **Stage-Wise Attribution of Geometric Error in Automatic Anatomical Surface Reconstruction From
 Computed Tomography.** Sameer Morya and Sarthak Wage. IEEE conference format, 6 pages.
 
-- PDF: [`docs/paper/medsys-paper.pdf`](docs/paper/medsys-paper.pdf), also attached to release
-  [`v1.0-paper`](https://github.com/Organic42/MEDSYS/releases/tag/v1.0-paper)
+- PDF (revised after review: held-out pancreas, both engine modes): [`docs/paper/medsys-paper.pdf`](docs/paper/medsys-paper.pdf);
+  the first version is attached to release [`v1.0-paper`](https://github.com/Organic42/MEDSYS/releases/tag/v1.0-paper)
+- Supplement S1–S14, including repeatability (S13) and the accuracy estimate (S14):
+  [`docs/paper/supplement/medsys-supplement.pdf`](docs/paper/supplement/medsys-supplement.pdf)
+- Point-by-point response to the review: [`docs/paper/response-to-review.pdf`](docs/paper/response-to-review.pdf)
 - Source and reproduction steps: [`docs/paper/`](docs/paper/)
 - Longer Tier 2 report: [`docs/tier2-report/`](docs/tier2-report/)
 
@@ -201,11 +249,20 @@ pip install -r requirements-full.txt
 
 # Rebuild the paper's statistics, tables and figures from the saved results
 python -m research.paper_stats --tier1 research/results/tier1_phantoms_20261002-222422_full \
-       --tier2 research/results/tier2_spleen_resolution_20261004-214129 --out docs/paper
+       --tier2 research/results/tier2_spleen_two_modes_20261018-210930 \
+       --pancreas research/results/tier2_pancreas_heldout_20261018-223006 --out docs/paper
 
 # Or re-run the experiments (seed 2026)
 python -m research.phantom_experiment --preset full      # 7,760 meshes, about 3 min on 6 cores
-python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset full --workers 5
+python -m research.tier2 --dataset msd_spleen --data data/msd/Task09_Spleen --preset full --engines ts_fast,ts_full --workers 5
+python -m research.tier2 --dataset msd_pancreas --data data/msd/Task07_Pancreas --preset full --sample 41 --engines ts_fast,ts_full
+
+# Validation of the application (needs the Tier 2 engine cache)
+python -m research.card_validation --workers 8           # test 1, about 4 min
+python -m research.repeatability                         # test 2, about 2 h on one GPU
+python -m research.tier2 --dataset amos --data data/amos/amos22 --preset pilot --sample 5 --engines ts_fast,ts_full
+python -m research.card_external                         # test 4, on the cached AMOS masks
+python docs/validation/make_report.py --pdf              # validation report from the saved runs
 
 # Tests
 pytest                                                   # 118 tests
@@ -299,14 +356,20 @@ segmentation runs as a subprocess, so a crashing job cannot take the service dow
 MEDSYS/
 ├── reconstruction.py          # Shared mesh reconstruction (production and research)
 ├── segmentation_pipeline.py   # Modality-aware segmentation pipelines
+├── accuracy.py                # Per-mesh accuracy estimate
+├── gpu_worker.py, medsam.py   # Persistent GPU worker; MedSAM loading and refinement
+├── publicdemo.py              # Public demo mode: per-visitor data, retention, limits
 ├── validate.py                # Reference comparison: Dice, IoU, HD95, ASSD
-├── research/                  # Tier 1 and Tier 2 experiments, metrics, paper statistics
-│   └── results/               # Per-mesh results behind the paper (compressed)
+├── research/                  # Tier 1 and Tier 2 experiments, validation tests, paper statistics
+│   └── results/               # Per-mesh results behind the paper and the validation (compressed)
 ├── docs/
-│   ├── paper/                 # The paper: LaTeX, figures, PDF, reproduction steps
+│   ├── paper/                 # The paper, supplement and response to review
+│   ├── validation/            # Validation report, figures, printed-phantom protocol
 │   ├── tier2-report/          # Detailed Tier 2 report
 │   └── images/                # README screenshots and figures
-├── tests/                     # 91 tests: pipeline, phantoms, metrics, Tier 2, paper statistics
+├── tests/                     # 118 tests: pipeline, accuracy estimate, GPU worker, public demo, phantoms, Tier 2
+├── samples/                   # Public de-identified chest CT used by the demo
+├── deploy/                    # Hugging Face Space publisher
 ├── app.py, tasks.py, worker.py, jobstore.py, config.py   # Web service and job handling
 ├── web/                       # Workbench and Neuroplasticity Explorer
 ├── brain_knowledge.py         # Explorer evidence base
@@ -322,6 +385,9 @@ MEDSYS/
 - [x] Paper draft (IEEE conference format)
 - [x] Held-out second organ: MSD Pancreas, 41 scans, hypotheses fixed beforehand
 - [x] TotalSegmentator full-resolution (1.5 mm) model
+- [x] External-data pilot: AMOS and CT-ORG (liver, lungs, bone, aorta, vena cava)
+- [ ] Full external runs (40+ AMOS scans) and recalibration of the engine figure across centres
+- [ ] Agreement with experts: MEDSYS against inter-annotator variation
 - [ ] Third dataset with real thin and thick reconstructions of the same scans
 - [ ] Systematic, logged literature search to confirm novelty
 - [ ] RQ2: ground-truth-free error prediction with calibrated intervals
@@ -334,7 +400,9 @@ MEDSYS/
 - [x] Accuracy estimate per mesh, from the study's results (`accuracy.py`)
 - [x] Persistent GPU worker (`gpu_worker.py`)
 - [x] Validation of the accuracy estimate and of repeatability ([`docs/validation/`](docs/validation/))
-- [ ] Physical phantom: printed shapes of known size in a real CT scanner
+- [x] Public demo mode with a de-identified sample scan
+- [ ] Physical phantom in a real CT scanner (kit, protocol and analysis ready)
+- [ ] Parallel meshing across CPU cores (meshing is now the slowest step, about 44 s)
 - [ ] Mesh TotalSegmentator output on its working grid (confirm on CT-ORG first)
 - [ ] Blur specified in millimetres in production
 - [ ] Verified de-identification and opaque dataset identifiers
@@ -344,11 +412,14 @@ MEDSYS/
 
 A working research prototype. The platform runs end to end and its 118 tests pass. RQ1 has results
 on phantoms and on two organs (spleen, and the pancreas held out; 41 scans each) with both
-TotalSegmentator modes. Two validation tests check what the app itself delivers: its accuracy
-estimate against the true error of 590 of its meshes, and the repeatability of the same scan
-across 184 runs ([report](docs/validation/validation-report.pdf)).
+TotalSegmentator modes. Validation tests check what the app itself delivers: its accuracy
+estimate against the true error of 590 of its meshes, the repeatability of the same scan across
+184 runs, and a first pilot on data from other centres (AMOS, CT-ORG)
+([report](docs/validation/validation-report.pdf)). A printed-phantom test is ready and waits for
+scanner time.
 
-**Limitations.** Real-anatomy results cover two organs from one public dataset and one engine.
+**Limitations.** Real-anatomy results cover two organs from one public dataset and one engine; the
+external pilot has 5 scans per dataset, and there the engine figure was optimistic.
 Coarser acquisition was simulated by resampling, not by rescanning. The reference surfaces carry
 the native scan's own sampling error, so differences below about 0.2–0.5 mm cannot be called
 anatomical error. No claim here should be read as clinical accuracy.
@@ -376,7 +447,8 @@ anatomical error. No claim here should be read as clinical accuracy.
 MEDSYS builds on TotalSegmentator (Wasserthal et al., *Radiology: Artificial Intelligence*, 2023),
 nnU-Net (Isensee et al., *Nature Methods*, 2021), MedSAM, BET, N4ITK and marching cubes, and the
 Tier 2 data come from the Medical Segmentation Decathlon (Antonelli et al., *Nature
-Communications*, 2022); please cite them where you use them.
+Communications*, 2022); the external pilot uses AMOS (Ji et al., NeurIPS 2022, CC BY 4.0) and
+CT-ORG (Rister et al., *Scientific Data*, 2020, CC BY 3.0); please cite them where you use them.
 
 ## Authors
 
