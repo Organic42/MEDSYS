@@ -25,6 +25,11 @@ for _stream in (sys.stdout, sys.stderr):
 
 
 def main():
+    # The pipeline meshes in a spawned process pool; in a frozen exe each pool
+    # process re-runs this exe, and freeze_support() turns it into a worker
+    # instead of a second web server.
+    import multiprocessing
+    multiprocessing.freeze_support()
     if len(sys.argv) > 1 and sys.argv[1] == '--run-pipeline':
         # Strip our dispatch flag; argparse in segmentation_pipeline.main()
         # reads the rest of sys.argv as if it were invoked directly.

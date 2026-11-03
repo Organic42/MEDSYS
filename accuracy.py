@@ -164,14 +164,29 @@ def attach(mesh, result, spacing):
     mesh.field_data['medsys_spacing_mm'] = np.asarray(spacing, dtype=float)
 
 
+def entry(mesh):
+    """The assessment attach() stored on a mesh, as (entry, spacing), or None."""
+    if 'medsys_recon_assd_mm' not in mesh.field_data:
+        return None
+    e = {k: float(mesh.field_data[f'medsys_{k}'][0]) for k in FIELDS}
+    e = {k: None if np.isnan(v) else v for k, v in e.items()}
+    e['watertight'], e['pieces'] = bool(e['watertight']), int(e['pieces'])
+    return e, [float(s) for s in mesh.field_data['medsys_spacing_mm']]
+
+
 def record(mesh, outdir, name):
     """Write a saved mesh's assessment into <outdir>/accuracy.json."""
-    if 'medsys_recon_assd_mm' not in mesh.field_data:
+    got = entry(mesh)
+    if got:
+        record_entries(outdir, [(name, *got)])
+
+
+def record_entries(outdir, entries):
+    """Write several (name, entry, spacing) assessments into accuracy.json in
+    one go. Parallel meshing hands its results here, so only one process ever
+    reads and rewrites the file."""
+    if not entries:
         return
-    entry = {k: float(mesh.field_data[f'medsys_{k}'][0]) for k in FIELDS}
-    entry = {k: None if np.isnan(v) else v for k, v in entry.items()}
-    entry['watertight'], entry['pieces'] = bool(entry['watertight']), int(entry['pieces'])
-    spacing = [float(s) for s in mesh.field_data['medsys_spacing_mm']]
     path = os.path.join(outdir, FILE)
     data = {}
     if os.path.exists(path):
@@ -180,8 +195,9 @@ def record(mesh, outdir, name):
                 data = json.load(fh)
         except (OSError, ValueError):
             data = {}
-    data.setdefault('structures', {})[name] = entry
-    data['spacing_mm'] = spacing
+    for name, e, spacing in entries:
+        data.setdefault('structures', {})[name] = e
+    data['spacing_mm'] = spacing              # the last mesh's, as when they were recorded one by one
     data['resolution_limit'] = resolution_limit(spacing)
     data['prediction_interval_mm'] = PREDICTION_INTERVAL_MM
     with open(path, 'w', encoding='utf-8') as fh:

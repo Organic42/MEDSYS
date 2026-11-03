@@ -51,6 +51,11 @@ MAX_QUEUE = int(os.environ.get('VRSEG_MAX_QUEUE', '3'))
 # with the raw segmentation surface, adding a fraction of a second per mesh.
 ACCURACY = os.environ.get('VRSEG_ACCURACY', 'on').lower() != 'off'
 
+# Meshing processes per TotalSegmentator job (segmentation_pipeline.mesh_structures):
+# 0 picks min(12, cores), where the speed-up levelled off on a 24-thread CPU;
+# 1 meshes every structure in the job's own process, as before.
+MESH_WORKERS = int(os.environ.get('VRSEG_MESH_WORKERS', '0'))
+
 # Persistent GPU worker (gpu_worker.py): 'auto' starts it when a CUDA GPU is
 # present and keeps the models loaded between jobs; 'off' runs every GPU step
 # inside the job's own process, as before.

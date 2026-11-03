@@ -69,7 +69,7 @@ Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segment
 | **Workbench** | Dataset, structures and pipeline on the left; a 3D stage with surface, wireframe and X-ray modes in the centre; mesh checks, the accuracy estimate and reference metrics on the right |
 | **Measured, not guessed** | Mesh checks show real structural data (on the CT above: 46 of 79 meshes closed, 43 of 79 in one piece, 58 of 79 manifold, 817,158 triangles). The accuracy estimate gives every mesh the error its voxel spacing alone imposes, measures how far smoothing and simplification moved it, and shows the engine's error against expert labels where the study measured it (TotalSegmentator on spleen and pancreas), saying "not validated" everywhere else. Each line was checked against the true error of 590 of the app's own meshes ([validation report](docs/validation/validation-report.pdf)) |
 | **Neuroplasticity Explorer** | Questions about behaviour and the brain, answered from a curated evidence base and mapped onto a 3D brain |
-| **Speed** | A persistent GPU worker keeps TotalSegmentator and MedSAM loaded between jobs: 5.3 s instead of 28.7 s of segmentation per CT scan, 52 s instead of 75 s for the whole job |
+| **Speed** | A persistent GPU worker keeps TotalSegmentator and MedSAM loaded between jobs (5.3 s instead of 28.7 s of segmentation per CT scan), and structures are meshed in parallel processes (10.7 s instead of 57.3 s for 79 meshes): about 21 s for a whole chest CT job |
 | **Deployment** | Docker Compose (API, Redis and workers), a lightweight Hugging Face Spaces image with a public demo mode, and a standalone Windows build |
 
 <img src="docs/images/workbench-accuracy.jpg" alt="MEDSYS workbench on a public chest CT with 79 structures, mesh checks and the accuracy estimate card on the right" width="100%">
@@ -198,10 +198,21 @@ runs that work in-process. On a 64-slice chest CT:
 | Stage | Per-job process | Persistent GPU worker |
 |---|---|---|
 | TotalSegmentator CT, fast (3 mm) | 28.7 s | 5.3 s (5.4×) |
-| Whole job, 79 structures meshed | 75 s | 52 s |
+| Whole job, 79 structures meshed one by one (19 Oct 2026) | 75 s | 52 s |
 
 The masks match TotalSegmentator's own output to within its run-to-run variation (nnU-Net uses
 cuDNN autotuning, so two processes can differ in a few hundred of 2.3 million voxels).
+
+That left meshing as the slowest step: the structures were meshed one after another, each with
+its accuracy estimate. They are now meshed in a pool of up to 12 processes
+(`segmentation_pipeline.mesh_structures`); threads barely help because the work holds Python's
+lock (29 s on 8 threads), and more than 12 processes gained nothing on a 24-thread CPU. The output
+is byte-identical to meshing one by one. Same chest CT, warm GPU worker, mean of two runs:
+
+| Stage | One by one | 12 processes |
+|---|---|---|
+| Meshing 79 structures, with the accuracy estimate | 57.3 s | 10.7 s (5.4×) |
+| Whole job | 67.5 s | 21.0 s (3.2×) |
 
 ## Validation
 
@@ -304,6 +315,9 @@ python segmentation_pipeline.py --input <dicom_dir> --name <dataset> --engine to
   not running or a request fails, the job runs the step in its own process as before. Set
   `VRSEG_GPU_WORKER_MODE=off` to disable it. `VRSEG_ACCURACY=off` skips the per-mesh accuracy
   estimate, which adds about 0.1 s per mesh.
+- **Meshing processes:** TotalSegmentator structures are meshed in `min(12, CPU count)`
+  processes. Set `VRSEG_MESH_WORKERS` to another number, or to `1` to mesh in the job's own
+  process; if the pool cannot start, the job meshes one by one.
 
 </details>
 
@@ -402,7 +416,7 @@ MEDSYS/
 - [x] Validation of the accuracy estimate and of repeatability ([`docs/validation/`](docs/validation/))
 - [x] Public demo mode with a de-identified sample scan
 - [ ] Physical phantom in a real CT scanner (kit, protocol and analysis ready)
-- [ ] Parallel meshing across CPU cores (meshing is now the slowest step, about 44 s)
+- [x] Parallel meshing across CPU cores (`mesh_structures`: 57 s to 11 s for 79 CT structures)
 - [ ] Mesh TotalSegmentator output on its working grid (confirm on CT-ORG first)
 - [ ] Blur specified in millimetres in production
 - [ ] Verified de-identification and opaque dataset identifiers
