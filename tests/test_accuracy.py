@@ -67,6 +67,14 @@ def test_validated_figures_only_for_measured_engine_and_organs(tmp_path):
     assert accuracy.for_dataset(str(tmp_path / 'missing'), {}) is None
 
 
+def test_every_line_states_its_basis(tmp_path):
+    # the engine figure comes from other scans and must never read as a prediction for this mesh
+    (tmp_path / accuracy.FILE).write_text(json.dumps({'structures': {'spleen': {}}, 'spacing_mm': [1, 1, 1]}))
+    basis = accuracy.for_dataset(str(tmp_path), {'engine': 'TotalSegmentator'})['basis']
+    assert basis == {'resolution_limit': 'estimated', 'reconstruction': 'measured',
+                     'watertight': 'measured', 'segmentation': 'study'}
+
+
 def test_engine_figures_follow_the_scan_grid(tmp_path):
     assert accuracy.reference_level((0.7, 0.7, 2.5)) == 'native'
     assert accuracy.reference_level((0.8, 0.8, 5.0)) == 'slice5'

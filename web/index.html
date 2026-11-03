@@ -240,6 +240,10 @@
   .arow .v{font:500 12.5px var(--mono);color:var(--text);white-space:nowrap;}
   .arow .v.na{color:var(--muted);font-weight:400;}
   .arow .s{font-size:11.5px;color:var(--text-2);line-height:1.4;margin-top:3px;}
+  .basis{display:inline-block;font-size:10.5px;font-weight:500;border-radius:999px;padding:1px 7px;margin-top:5px;}
+  .basis.measured{color:#1F6B44;background:var(--success-bg);}
+  .basis.estimated{color:var(--text-2);background:var(--bg);}
+  .basis.study{color:#8A5A0B;background:var(--warning-bg);}
   #accuracy .field{margin:0 0 10px;}
   .callout{background:var(--elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px;
     color:var(--text-2);line-height:1.45;margin-bottom:12px;}
@@ -787,9 +791,12 @@ function buildMetrics(ds){
 
 // ---------- right: accuracy estimate (accuracy.py, the MEDSYS study) ----------
 const mmFmt = x => `${(+x).toFixed(2)} mm`;
-function arow(label, value, sub, na){
+// Where each number comes from (accuracy.BASIS): a study figure from other scans must never read as a prediction for this model
+const BASIS_LABEL = {measured: 'Measured on this model', estimated: 'Estimated for this scan', study: 'Study benchmark · other scans'};
+function arow(label, value, sub, na, kind){
   return `<div class="arow"><div class="top"><span>${label}</span><span class="v${na ? ' na' : ''}">${value}</span></div>`
-    + (sub ? `<div class="s">${sub}</div>` : '') + '</div>';
+    + (sub ? `<div class="s">${sub}</div>` : '')
+    + (kind ? `<span class="basis ${kind}">${BASIS_LABEL[kind]}</span>` : '') + '</div>';
 }
 function buildAccuracy(ds){
   const a = ds.accuracy, el = $('accuracy');
@@ -803,16 +810,19 @@ function buildAccuracy(ds){
     + `<option value="">All ${names.length} structures</option>`
     + names.map(n => `<option value="${esc(n)}">${esc(pretty(n))}</option>`).join('') + '</select></label>'
     + '<div id="accBody"></div>'
-    + '<p class="note" style="margin-top:8px">Typical error of this pipeline from the MEDSYS study (Morya and Wage, 2026), '
-    + 'not a measurement of this scan against the true anatomy. Research use only.</p>';
+    + '<p class="note" style="margin-top:8px"><b>Measured</b>: computed on this model. <b>Estimated</b>: predicted for this scan from its voxel spacing. '
+    + '<b>Study benchmark</b>: the engine’s observed error on other expert-labelled scans (MEDSYS study, Morya and Wage, 2026), '
+    + 'not a measurement or prediction of this model; predicting each model’s own error is in development. '
+    + 'Nothing here is measured against the true anatomy. Research use only.</p>';
   $('accStruct').onchange = e => renderAccuracy(a, e.target.value);
   renderAccuracy(a, '');
 }
 function renderAccuracy(a, name){
+  const B = a.basis || {resolution_limit:'estimated', reconstruction:'measured', watertight:'measured', segmentation:'study'};
   const lim = a.resolution_limit, sp = a.spacing_mm || [];
   const spTxt = sp.map(v => +(+v).toFixed(2)).join(' × ');
   let html = arow('Resolution limit', `≈ ${mmFmt(lim.estimate_mm)}`,
-    `${lim.range_mm[0].toFixed(2)}–${mmFmt(lim.range_mm[1])} from the ${spTxt} mm voxel spacing alone, even with a perfect segmentation.`);
+    `${lim.range_mm[0].toFixed(2)}–${mmFmt(lim.range_mm[1])} from the ${spTxt} mm voxel spacing alone, even with a perfect segmentation.`, false, B.resolution_limit);
   const engine = a.engine === 'TotalSegmentator' ? `TotalSegmentator (${a.engine_mode})` : 'The classical engine';
   if (!name){
     const s = Object.values(a.structures), shift = s.map(x => x.recon_assd_mm).sort((p, q) => p - q);
@@ -820,31 +830,31 @@ function renderAccuracy(a, name){
     const closed = s.filter(x => x.watertight).length;
     const val = Object.keys(a.validated || {});
     html += arow('Smoothing &amp; simplification', `median ${mmFmt(median)}`,
-      `Mean shift of each mesh from its raw segmentation surface: ${mmFmt(shift[0])} to ${mmFmt(shift[shift.length - 1])} across ${s.length} structures.`);
+      `Mean shift of each mesh from its raw segmentation surface: ${mmFmt(shift[0])} to ${mmFmt(shift[shift.length - 1])} across ${s.length} structures.`, false, B.reconstruction);
     html += val.length
-      ? arow('Segmentation', `validated for ${val.length}`,
-          `${engine} was compared with expert labels for ${val.map(v => esc(pretty(v))).join(', ')}. Choose a structure for its figure; the others are not validated.`)
+      ? arow('Segmentation', `benchmark for ${val.length}`,
+          `${engine} was compared with expert labels on other scans for ${val.map(v => esc(pretty(v))).join(', ')}. Choose a structure for its figure; the others are not validated.`, false, B.segmentation)
       : arow('Segmentation', 'not validated',
           `${engine} has not been compared with expert labels for these structures, so expect at least the resolution limit.`, true);
     html += arow('Watertight', `${closed} of ${s.length}`,
-      'No holes and no non-manifold edges, as 3D printing and volume measurement need. Open meshes usually touch the edge of the scan.');
+      'No holes and no non-manifold edges, as 3D printing and volume measurement need. Open meshes usually touch the edge of the scan.', false, B.watertight);
   } else {
     const s = a.structures[name], v = (a.validated || {})[name];
     const dir = s.recon_signed_mm < 0 ? 'shrank' : 'grew';
     html += arow('Smoothing &amp; simplification', mmFmt(s.recon_assd_mm),
       `95% of the surface within ${mmFmt(s.recon_p95_mm)} of the raw segmentation; it ${dir} by ${mmFmt(Math.abs(s.recon_signed_mm))} on average`
-      + (s.volume_change_pct != null ? `, volume ${s.volume_change_pct > 0 ? '+' : ''}${s.volume_change_pct.toFixed(1)}%.` : '.'));
+      + (s.volume_change_pct != null ? `, volume ${s.volume_change_pct > 0 ? '+' : ''}${s.volume_change_pct.toFixed(1)}%.` : '.'), false, B.reconstruction);
     html += v
-      ? arow('Segmentation', `≈ ${mmFmt(v.median_mm)}`,
-          `Median surface error of ${engine} against expert labels on ${v.scans} scans ${esc(v.grid)}, `
-          + `the closest to this one (${esc(v.data)}). Middle half ${v.iqr_mm[0].toFixed(2)}–${mmFmt(v.iqr_mm[1])}; `
-          + `9 in 10 scans ${v.range90_mm[0].toFixed(2)}–${mmFmt(v.range90_mm[1])}.`)
+      ? arow('Segmentation', `median ${mmFmt(v.median_mm)}`,
+          `Observed surface error (ASSD) of ${engine} against expert labels on ${v.scans} other scans ${esc(v.grid)}, `
+          + `the grid closest to this one (${esc(v.data)}). Middle half ${v.iqr_mm[0].toFixed(2)}–${mmFmt(v.iqr_mm[1])}; `
+          + `9 in 10 scans ${v.range90_mm[0].toFixed(2)}–${mmFmt(v.range90_mm[1])}. Not a prediction for this model.`, false, B.segmentation)
       : arow('Segmentation', 'not validated',
           `${engine} has not been compared with expert labels for ${esc(pretty(name).toLowerCase())}, so expect at least the resolution limit.`, true);
     html += arow('Watertight', s.watertight ? 'yes' : 'no',
       s.watertight ? 'No holes and no non-manifold edges: ready for 3D printing and volume measurement.'
                    : `Has holes or non-manifold edges${s.pieces > 1 ? `, in ${s.pieces} pieces` : ''}; it may touch the edge of the scan. Repair it before 3D printing.`,
-      !s.watertight);
+      !s.watertight, B.watertight);
   }
   $('accBody').innerHTML = html;
 }

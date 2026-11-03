@@ -98,6 +98,16 @@ def engine_reference(mode, structure, spacing):
         return None
     return dict(ref, level=level, grid=GRIDS[level], data=_DATA[structure])
 
+# What each line of the card rests on, sent with every estimate so no client
+# shows a study statistic as if it were a prediction for this model:
+#   measured   computed on this mesh
+#   estimated  predicted for this scan from its voxel spacing with the study's fit
+#   study      the engine's observed error on other expert-labelled scans; a
+#              benchmark for scans like this one, not a prediction for this mesh
+#              (predicting each mesh's own error is RQ2, not built yet)
+BASIS = {'resolution_limit': 'estimated', 'reconstruction': 'measured',
+         'watertight': 'measured', 'segmentation': 'study'}
+
 FILE = 'accuracy.json'
 SAMPLES = 3000                      # surface points per side; enough for a mean at ~0.01 mm
 
@@ -191,6 +201,7 @@ def for_dataset(ds_dir, report):
         return None
     engine = (report or {}).get('engine')
     data['engine'] = engine or 'classical'
+    data['basis'] = dict(BASIS)
     data['validated'] = {}
     if data.get('spacing_mm'):              # from the current constants, not those at meshing time
         data['resolution_limit'] = resolution_limit(data['spacing_mm'])
