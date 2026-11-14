@@ -38,3 +38,32 @@ def test_simulated_scan_is_recovered(tmp_path, monkeypatch):
     # about 0.14 x voxel on exact surfaces (Tier 1), plus partial volume and noise
     assert can['sphere_r8']['assd_mm'] < 0.3 and can['capsule_r2']['assd_mm'] < 0.4
     assert abs(can['sphere_r8']['volume_err_pct']) < 5
+
+
+def test_scanner_export_tree_is_split_into_reconstructions(tmp_path):
+    # A USB export: every reconstruction in one tree, one series split over two folders
+    # with file names in no particular order, and a scout that must be skipped.
+    pytest.importorskip('SimpleITK')
+    pydicom = pytest.importorskip('pydicom')
+    rng = np.random.default_rng(1)
+    thin = rng.normal(0, 50, (16, 12, 30)).astype(np.float32)
+    thick = rng.normal(0, 50, (16, 12, 24)).astype(np.float32)
+    root = tmp_path / 'usb' / 'DICOM'
+    pp.write_dicom(thin, (0.5, 0.5, 1.25), str(root / 'A'))
+    pp.write_dicom(thick, (0.8, 0.8, 5.0), str(root / 'B'))
+    pp.write_dicom(thin[:, :, :2], (0.5, 0.5, 1.25), str(root / "scout"))
+    for i, f in enumerate(sorted((root / 'A').iterdir())):            # split series A, scramble names
+        dest = root / ('A2' if i % 2 else 'A')
+        dest.mkdir(exist_ok=True)
+        f.rename(dest / f'IM{(i * 7919) % 1000:04d}')
+    for k, (sub, number) in enumerate((('A', 3), ('A2', 3), ('B', 5))):
+        for f in (root / sub).iterdir():
+            ds = pydicom.dcmread(f)
+            ds.SeriesNumber, ds.ConvolutionKernel = number, 'B30f'
+            ds.save_as(f)
+    series = pp.find_series(str(tmp_path / 'usb'))
+    assert [len(fs) for _, fs in series] == [30, 24]                   # scout skipped, A reassembled
+    assert series[0][0].startswith('S3 ') and '1.25 mm' in series[0][0] and 'B30f' in series[0][0]
+    vol, spacing = pp.load_volume(series[0][1])
+    assert np.allclose(spacing, (0.5, 0.5, 1.25)) and np.allclose(vol, np.round(thin))   # slices back in order
+    assert [label for label, _ in pp.scans_from([str(tmp_path / 'usb')])] == [label for label, _ in series]

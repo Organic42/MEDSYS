@@ -39,13 +39,19 @@ A note for the radiographer: this is a plastic object, not a patient, so no ethi
   - slice thickness **0.6 (or 0.625), 1.25, 2.5 and 5 mm**;
   - field of view about 250 mm (pixels about 0.5 mm), and one at 400–500 mm (pixels about 0.8–1 mm) to mimic body scans.
 - **Optional:** a bone kernel at 1.25 mm, and a second scan with the objects submerged in water. PLA in water has a soft-tissue-like contrast of about 150 HU, closer to real organs.
-- **Export:** uncompressed DICOM, one folder per reconstruction, onto a USB stick.
+- **Export:** uncompressed DICOM of every reconstruction onto a USB stick; any folder layout works.
 
 ## 3. Analyse
 
 ```bash
-python -m research.physical_phantom analyse "D:/phantom/*" --calipers docs/validation/phantom/calipers.csv
+python -m research.physical_phantom analyse "E:/" --calipers docs/validation/phantom/calipers.csv
 ```
+
+Point it at the USB stick as the scanner exported it. Every CT series in the tree is found and
+analysed as its own reconstruction, whatever the folder layout (a DICOMDIR, one folder per
+series, or a series split over folders); scouts are skipped. Each is labelled by series
+number, description, slice thickness, kernel and pixel size. NIfTI files also work, one per
+reconstruction.
 
 For each reconstruction and object, the analysis:
 

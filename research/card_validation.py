@@ -79,6 +79,8 @@ def run_case(task):
     lab = nib.load(label_path)
     spacing = tuple(float(z) for z in lab.header.get_zooms()[:3])
     gt = np.isin(np.rint(np.asanyarray(lab.dataobj)).astype(np.int16), values)
+    if not gt.any():
+        return []                       # the organ is not in this scan's label (e.g. removed)
     (gt_c,), gt_start = tier2.crop_to([gt], 6)
     rv, rf = extract_isosurface(gt_c, spacing, ReconParams(),          # the reference surface
                                 tuple(float(a) * s for a, s in zip(gt_start, spacing)))

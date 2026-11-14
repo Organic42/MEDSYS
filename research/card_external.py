@@ -50,7 +50,7 @@ def summarise(df, run):
     gt = df[df.source == 'gt']
     L = ['# Validation test 4: the accuracy estimate on unseen data (AMOS)\n',
          f"Run {run['started']}. The card frozen as shipped, applied to {df.case.nunique()} AMOS CT scans "
-         f"({len(ok)} delivered meshes). Targets: 50% inside the middle half, 90% inside the 9-in-10 range."
+         f"({len(ok)} delivered meshes; organ not in the expert label: {run.get('organ_not_labelled', 0)} scan-organ pairs). Targets: 50% inside the middle half, 90% inside the 9-in-10 range."
          + (' **Pilot: too few scans for a verdict.**' if df.case.nunique() < 20 else '') + '\n',
          '| Organ | Mode | Meshes | Middle half | 9-in-10 range | Below middle half | Above middle half | '
          'Median true ASSD (mm) | Card median (mm) |',
@@ -93,14 +93,17 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     run = {'test': 'card_external', 'started': stamp, 'dataset': DATASET, 'scans': len(cases), 'tasks': len(tasks),
            'sources': SOURCES, 'seed': args.seed, 'python': platform.python_version()}
-    rows, t0 = [], time.time()
+    rows, t0, absent = [], time.time(), 0
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         for i, fut in enumerate(as_completed([pool.submit(run_case, t) for t in tasks]), 1):
-            rows += fut.result()
+            got = fut.result()
+            absent += not got
+            rows += got
             print(f'{i}/{len(tasks)}  {time.time() - t0:.0f} s', flush=True)
     df = pd.DataFrame(rows)
     df.to_csv(os.path.join(outdir, 'results.csv'), index=False)
     run['seconds'] = round(time.time() - t0)
+    run['organ_not_labelled'] = absent
     with open(os.path.join(outdir, 'run.json'), 'w', encoding='utf-8') as fh:
         json.dump(run, fh, indent=1)
     text = summarise(df, run)

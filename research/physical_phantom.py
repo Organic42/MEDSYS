@@ -274,10 +274,63 @@ def simulate(out, spacing, seed=2026, medium='air'):
 
 # ── analysis ─────────────────────────────────────────────────────────────
 
-def load_volume(path):
-    """HU volume with array axes (x, y, z) in mm spacing, from a DICOM folder or NIfTI."""
+# Scouts are flagged LOCALIZER, or are a few slices at most; a 5 mm reconstruction of
+# the kit's 80 mm box still has 16 slices.
+MIN_SLICES = 5
+
+
+def find_series(root):
+    """Every CT reconstruction under a folder, as (label, files) sorted by series number.
+
+    A scanner's USB export puts all reconstructions of a session in one tree
+    (often under a DICOMDIR, sometimes one series split over folders), plus
+    scouts. Series are grouped by SeriesInstanceUID across the whole tree.
+    """
+    import pydicom
     import SimpleITK as sitk
-    if os.path.isdir(path):
+    reader = sitk.ImageSeriesReader()
+    files = {}
+    for d, _, names in os.walk(root):
+        if names:
+            for sid in reader.GetGDCMSeriesIDs(d):
+                files.setdefault(sid, []).extend(reader.GetGDCMSeriesFileNames(d, sid))
+    out = []
+    for sid, fs in files.items():
+        if len(fs) < MIN_SLICES:
+            continue
+        ds = pydicom.dcmread(fs[0], stop_before_pixels=True)
+        if 'LOCALIZER' in [str(t).upper() for t in getattr(ds, 'ImageType', [])]:
+            continue
+        kernel = getattr(ds, 'ConvolutionKernel', '')
+        kernel = '/'.join(kernel) if isinstance(kernel, pydicom.multival.MultiValue) else str(kernel)
+        px = getattr(ds, 'PixelSpacing', None)
+        number = getattr(ds, 'SeriesNumber', None)
+        parts = [f'S{number}' if number is not None else '', str(getattr(ds, 'SeriesDescription', '')).strip(),
+                 f"{float(ds.SliceThickness):g} mm" if getattr(ds, 'SliceThickness', None) else '', kernel,
+                 f"px {float(px[0]):.2f}" if px else '']
+        out.append((int(getattr(ds, 'SeriesNumber', 0) or 0), ' '.join(p for p in parts if p), _slice_order(fs)))
+    return [(label, fs) for _, label, fs in sorted(out, key=lambda x: (x[0], x[1]))]
+
+
+def _slice_order(files):
+    """One series' files ordered by position along the slice normal (folders and file names carry no order)."""
+    import pydicom
+    def pos(f):
+        ds = pydicom.dcmread(f, stop_before_pixels=True)
+        iop = np.asarray(ds.ImageOrientationPatient, float)
+        return float(np.asarray(ds.ImagePositionPatient, float) @ np.cross(iop[:3], iop[3:]))
+    return sorted(dict.fromkeys(files), key=pos)
+
+
+def load_volume(path):
+    """HU volume with array axes (x, y, z) in mm spacing, from a DICOM folder, a list of
+    one series' DICOM files, or NIfTI."""
+    import SimpleITK as sitk
+    if isinstance(path, (list, tuple)):
+        reader = sitk.ImageSeriesReader()
+        reader.SetFileNames(list(path))
+        img = reader.Execute()
+    elif os.path.isdir(path):
         reader = sitk.ImageSeriesReader()
         series = reader.GetGDCMSeriesIDs(path)
         if not series:
@@ -384,7 +437,8 @@ def register(ph, sig, points):
     return Placement(Rotation.from_rotvec(best.x[:3]), best.x[3:])
 
 
-def analyse_one(path, rng, log=print):
+def analyse_one(path, rng, log=print, label=None):
+    """Score one reconstruction: a DICOM folder, a NIfTI file, or (with label) one series' file list."""
     import accuracy
     from reconstruction import ReconParams, extract_isosurface, mesh_arrays, postprocess_surface
     from research.surface_metrics import compare_to_phantom, sample_mesh_surface
@@ -393,7 +447,7 @@ def analyse_one(path, rng, log=print):
     shapes = kit()
     found = components(vol > thr, spacing)
     matched, sig = match(found, spacing, shapes)
-    label = os.path.basename(os.path.normpath(path))
+    label = label or os.path.basename(os.path.normpath(path))
     log(f'{label}: spacing {spacing}, threshold {thr:.0f} HU (background {bg:.0f}, material {mat:.0f}), '
         f'{len(found)} objects')
     rows = []
@@ -472,13 +526,29 @@ def summarise(df, calipers=None):
     return '\n'.join(L)
 
 
+def scans_from(paths):
+    """(label, source) for every reconstruction to analyse. A NIfTI file is one scan;
+    a folder is searched for every CT series in it, however the scanner exported them."""
+    out = []
+    for p in paths:
+        if os.path.isdir(p):
+            series = find_series(p)
+            if not series:
+                raise SystemExit(f'no CT series of {MIN_SLICES}+ slices under {p}')
+            print(f'{p}: {len(series)} reconstruction(s): ' + '; '.join(label for label, _ in series))
+            out += series
+        else:
+            out.append((os.path.basename(p), p))
+    return out
+
+
 def analyse(paths, out, calipers=None, seed=2026):
     import pandas as pd
     os.makedirs(out, exist_ok=True)
     rng = np.random.default_rng(seed)
     rows, t0 = [], time.time()
-    for p in paths:
-        rows += analyse_one(p, rng)
+    for label, src in scans_from(paths):
+        rows += analyse_one(src, rng, label=label)
     df = pd.DataFrame(rows)
     df.to_csv(os.path.join(out, 'results.csv'), index=False)
     cal = pd.read_csv(calipers) if calipers else None
@@ -503,7 +573,8 @@ def main():
     s.add_argument('--medium', choices=('air', 'water'), default='air')
     s.add_argument('--seed', type=int, default=2026)
     a = sub.add_parser('analyse')
-    a.add_argument('scans', nargs='+', help='DICOM folders or NIfTI files, one per reconstruction')
+    a.add_argument('scans', nargs='+', help='the scanner export folder (every CT series in it is analysed), '
+                                            'or NIfTI files, one per reconstruction')
     a.add_argument('--out', default=None)
     a.add_argument('--calipers', default=None, help='calipers.csv with the measured_mm column filled in')
     a.add_argument('--seed', type=int, default=2026)
