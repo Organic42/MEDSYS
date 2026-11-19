@@ -50,8 +50,9 @@ that measures how far those models can be trusted.
 | **0.76–0.90 mm** | average distance of a finished spleen model from the expert's outline |
 | **89.5% / 99.9%** | of an AI engine's surface-error variance that is patient-to-patient (spleen / pancreas) |
 | **590** | of the app's own meshes used to check its per-mesh accuracy estimate |
-| **28.7 s → 5.3 s** | TotalSegmentator time per CT scan with the persistent GPU worker |
-| **118** | automated tests |
+| **54 / 710** | unseen AMOS scans and meshes used to check the estimate on data from other centres |
+| **67.5 s → 21 s** | a whole chest CT job, scan to 79 meshes, with the persistent GPU worker and parallel meshing |
+| **123** | automated tests |
 
 ## The product
 
@@ -67,7 +68,7 @@ Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segment
 | **Modalities** | CT, MRI (brain) and PET, routed automatically from DICOM metadata |
 | **Engines** | A fast classical engine (intensity thresholds, BET, Gaussian mixture) and TotalSegmentator (nnU-Net) for 100+ labelled structures, with MedSAM refinement for MRI |
 | **Workbench** | Dataset, structures and pipeline on the left; a 3D stage with surface, wireframe and X-ray modes in the centre; mesh checks, the accuracy estimate and reference metrics on the right |
-| **Measured, not guessed** | Mesh checks show real structural data (on the CT above: 46 of 79 meshes closed, 43 of 79 in one piece, 58 of 79 manifold, 817,158 triangles). The accuracy estimate gives every mesh the error its voxel spacing alone imposes, measures how far smoothing and simplification moved it, and shows the engine's error against expert labels where the study measured it (TotalSegmentator on spleen and pancreas), saying "not validated" everywhere else. Each line was checked against the true error of 590 of the app's own meshes ([validation report](docs/validation/validation-report.pdf)) |
+| **Measured, not guessed** | Mesh checks show real structural data (on the CT above: 46 of 79 meshes closed, 43 of 79 in one piece, 58 of 79 manifold, 817,158 triangles). The accuracy estimate gives every mesh the error its voxel spacing alone imposes, measures how far smoothing and simplification moved it, and shows the engine's error against expert labels where the study measured it (TotalSegmentator on spleen and pancreas), saying "not validated" everywhere else. Each line says what it rests on: *measured on this model*, *estimated for this scan*, or *study benchmark* from other scans, so a benchmark is never read as this patient's error. Each line was checked against the true error of 590 of the app's own meshes ([validation report](docs/validation/validation-report.pdf)) and on 710 meshes from unseen AMOS scans |
 | **Neuroplasticity Explorer** | Questions about behaviour and the brain, answered from a curated evidence base and mapped onto a 3D brain |
 | **Speed** | A persistent GPU worker keeps TotalSegmentator and MedSAM loaded between jobs (5.3 s instead of 28.7 s of segmentation per CT scan), and structures are meshed in parallel processes (10.7 s instead of 57.3 s for 79 meshes): about 21 s for a whole chest CT job |
 | **Deployment** | Docker Compose (API, Redis and workers), a lightweight Hugging Face Spaces image with a public demo mode, and a standalone Windows build |
@@ -89,7 +90,7 @@ stages interact. The thesis is **measure → predict → decide**:
 
 | | Question | Status |
 |---|---|---|
-| **RQ1 — Measure** | Which pipeline stages, and which interactions between them, contribute most to final geometric error? | Done on phantoms, 41 spleen and 41 held-out pancreas scans, both engine modes; external pilot on AMOS and CT-ORG |
+| **RQ1 — Measure** | Which pipeline stages, and which interactions between them, contribute most to final geometric error? | Done on phantoms, 41 spleen and 41 held-out pancreas scans, both engine modes; external check on 54 AMOS scans and a CT-ORG pilot |
 | **RQ2 — Predict** | Can final-mesh error be predicted without ground truth, with calibrated coverage? | Planned |
 | **RQ3 — Decide** | Can those predictions select the cheapest pipeline that meets a task's accuracy requirement? | Planned |
 
@@ -223,8 +224,8 @@ report: [`docs/validation/validation-report.pdf`](docs/validation/validation-rep
 |---|---|---|---|
 | 1 · Accuracy estimate ([`card_validation.py`](research/card_validation.py)) | Is the accuracy the app shows honest? | The app's own meshing code on all 82 scans, both modes and 4 grids (590 meshes); each line of the estimate compared with the true error, leave one scan out. About 4 min | Resolution limit inside its interval for 98% of held-out pancreas grids; smoothing shift correct to 0.022 mm; watertight flag right for 590 of 590. The engine figure was overconfident on coarse grids (as low as 15% in its middle half); fixed, it holds 50% and 86% in its 9-in-10 range (targets 50% and 90%) |
 | 2 · Repeatability ([`repeatability.py`](research/repeatability.py)) | Does the same scan always give the same model? | 10 scans, 184 runs: persistent GPU worker, a new GPU process each run, and the CPU. About 2 h | Identical masks in all 80 repeats on the worker; a new process or the CPU changed at most 96 organ voxels and moved the mesh by at most 0.025 mm |
-| 3 · Printed phantom ([`physical_phantom.py`](research/physical_phantom.py)) | Is it accurate on a real object? | Seven printable shapes with exact surfaces (sphere, box, torus, 2/4/6 mm tubes, a bifurcation), a print-and-scan [protocol](docs/validation/phantom/README.md) and an analysis tested on simulated CT | Ready; awaiting a CT scanner session |
-| 4 · New hospitals ([`card_external.py`](research/card_external.py)) | Does it hold on data from other centres? | Pilot on 5 AMOS and 5 CT-ORG scans (liver, spleen, pancreas, aorta, vena cava, lungs, bone). About 1 h | Resolution limit and watertight flag transfer; the engine figure is optimistic at the new centre (spleen about 1.2 mm against 0.8 mm stated). Full run next |
+| 3 · Printed phantom ([`physical_phantom.py`](research/physical_phantom.py)) | Is it accurate on a real object? | Seven printable shapes with exact surfaces (sphere, box, torus, 2/4/6 mm tubes, a bifurcation), a print-and-scan [protocol](docs/validation/phantom/README.md) and an analysis tested on simulated CT that reads a scanner's USB export in any folder layout | Ready; awaiting a CT scanner session |
+| 4 · New hospitals ([`card_external.py`](research/card_external.py)) | Does it hold on data from other centres? | A pilot on 5 AMOS and 5 CT-ORG scans, then the card frozen as shipped on 54 unseen AMOS scans (710 spleen and pancreas meshes, both modes). About 6 min | Resolution limit within ±0.11 mm on 92% of 248 grids; watertight flag right for 710 of 710; true error never below the resolution limit. The engine range is too narrow on the new centre: 30% in its middle half and 64% in its 9-in-10 range (targets 50% and 90%). Pancreas figures run high because AMOS labels exclude the tumour that the study's labels include. Recalibration across centres is next |
 
 **Fixed because of the tests:** the engine figure now uses the reference measured on the study
 grid closest to the scan; the resolution range's lower bound moved from 0.14 to 0.13; the
@@ -276,7 +277,7 @@ python -m research.card_external                         # test 4, on the cached
 python docs/validation/make_report.py --pdf              # validation report from the saved runs
 
 # Tests
-pytest                                                   # 118 tests
+pytest                                                   # 123 tests
 ```
 
 Full commands, software versions and a map from each paper item to its source:
@@ -381,7 +382,7 @@ MEDSYS/
 │   ├── validation/            # Validation report, figures, printed-phantom protocol
 │   ├── tier2-report/          # Detailed Tier 2 report
 │   └── images/                # README screenshots and figures
-├── tests/                     # 118 tests: pipeline, accuracy estimate, GPU worker, public demo, phantoms, Tier 2
+├── tests/                     # 123 tests: pipeline, accuracy estimate, GPU worker, public demo, phantoms, Tier 2
 ├── samples/                   # Public de-identified chest CT used by the demo
 ├── deploy/                    # Hugging Face Space publisher
 ├── app.py, tasks.py, worker.py, jobstore.py, config.py   # Web service and job handling
@@ -400,7 +401,8 @@ MEDSYS/
 - [x] Held-out second organ: MSD Pancreas, 41 scans, hypotheses fixed beforehand
 - [x] TotalSegmentator full-resolution (1.5 mm) model
 - [x] External-data pilot: AMOS and CT-ORG (liver, lungs, bone, aorta, vena cava)
-- [ ] Full external runs (40+ AMOS scans) and recalibration of the engine figure across centres
+- [x] Full external run: the shipped card on 54 unseen AMOS scans (710 meshes)
+- [ ] Recalibration of the engine figure across centres, tested on held-out external scans
 - [ ] Agreement with experts: MEDSYS against inter-annotator variation
 - [ ] Third dataset with real thin and thick reconstructions of the same scans
 - [ ] Systematic, logged literature search to confirm novelty
@@ -415,8 +417,10 @@ MEDSYS/
 - [x] Persistent GPU worker (`gpu_worker.py`)
 - [x] Validation of the accuracy estimate and of repeatability ([`docs/validation/`](docs/validation/))
 - [x] Public demo mode with a de-identified sample scan
-- [ ] Physical phantom in a real CT scanner (kit, protocol and analysis ready)
+- [ ] Physical phantom in a real CT scanner (kit, protocol and analysis ready; the analysis reads a scanner's USB export)
 - [x] Parallel meshing across CPU cores (`mesh_structures`: 57 s to 11 s for 79 CT structures)
+- [x] Every accuracy line labelled by its basis: measured, estimated or study benchmark
+- [ ] First clinician review of the workbench (neurosurgery), scheduled for November 2026
 - [ ] Mesh TotalSegmentator output on its working grid (confirm on CT-ORG first)
 - [ ] Blur specified in millimetres in production
 - [ ] Verified de-identification and opaque dataset identifiers
@@ -424,16 +428,17 @@ MEDSYS/
 
 ## Status
 
-A working research prototype. The platform runs end to end and its 118 tests pass. RQ1 has results
+A working research prototype. The platform runs end to end and its 123 tests pass. RQ1 has results
 on phantoms and on two organs (spleen, and the pancreas held out; 41 scans each) with both
 TotalSegmentator modes. Validation tests check what the app itself delivers: its accuracy
 estimate against the true error of 590 of its meshes, the repeatability of the same scan across
-184 runs, and a first pilot on data from other centres (AMOS, CT-ORG)
-([report](docs/validation/validation-report.pdf)). A printed-phantom test is ready and waits for
-scanner time.
+184 runs, and the estimate frozen as shipped on 710 meshes from 54 unseen AMOS scans, after a
+pilot on AMOS and CT-ORG ([report](docs/validation/validation-report.pdf)). A printed-phantom
+test is ready and waits for scanner time.
 
-**Limitations.** Real-anatomy results cover two organs from one public dataset and one engine; the
-external pilot has 5 scans per dataset, and there the engine figure was optimistic.
+**Limitations.** Real-anatomy results cover two organs from one public dataset and one engine. On
+external data the resolution limit and watertight flag hold, but the engine figure's range is too
+narrow (30% in its middle half against 50%) and needs recalibration across centres.
 Coarser acquisition was simulated by resampling, not by rescanning. The reference surfaces carry
 the native scan's own sampling error, so differences below about 0.2–0.5 mm cannot be called
 anatomical error. No claim here should be read as clinical accuracy.
