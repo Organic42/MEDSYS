@@ -225,6 +225,7 @@ def _finish_mesh(mesh, mask, spacing):
         # segmentation surface; saved with the mesh (see accuracy.py).
         try:
             accuracy.attach(mesh, accuracy.assess(mask, spacing, mesh), spacing)
+            mesh.point_data['medsys_shift_mm'] = accuracy.point_shift(mask, spacing, mesh)
         except Exception as e:  # noqa: BLE001  (an estimate must never cost a mesh)
             print(f"    accuracy estimate skipped: {e}", flush=True)
     return mesh
@@ -249,6 +250,8 @@ def save_mesh(mesh, outdir, name, record=True):
         mesh.save(os.path.join(outdir, f'{name}.{ext}'))
     pv.save_meshio(os.path.join(outdir, f'{name}.obj'), mesh)
     save_lite(mesh, outdir, name)
+    if 'medsys_shift_mm' in mesh.point_data:
+        accuracy.write_shift_map(mesh, mesh.point_data['medsys_shift_mm'], outdir, name)
     if record:
         accuracy.record(mesh, outdir, name)
 

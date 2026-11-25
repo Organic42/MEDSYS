@@ -152,6 +152,37 @@ def assess(mask, spacing, mesh, seed=0):
             'watertight': closed, 'pieces': int(m['components'])}
 
 
+def point_shift(mask, spacing, mesh):
+    """How far each point of a delivered mesh lies from the raw surface of the
+    same mask (marching cubes at 0.5, no blur, smoothing or decimation), in
+    mm: the shift that smoothing and simplification added at that point.
+    It measures the reconstruction step only, not the segmentation."""
+    import pyvista as pv
+    from reconstruction import ReconParams, extract_isosurface
+    idx = np.argwhere(mask)
+    lo = np.maximum(idx.min(axis=0) - 2, 0)
+    hi = np.minimum(idx.max(axis=0) + 3, mask.shape)
+    crop = mask[tuple(slice(a, b) for a, b in zip(lo, hi))]
+    origin = tuple(float(a) * float(s) for a, s in zip(lo, spacing))
+    rv, rf = extract_isosurface(crop, spacing, ReconParams(), origin)
+    ref = pv.PolyData(rv, np.hstack([np.full((len(rf), 1), 3), rf]).ravel())
+    probe = pv.PolyData(np.asarray(mesh.points, dtype=np.float64))
+    return np.abs(np.asarray(probe.compute_implicit_distance(ref)['implicit_distance'], dtype=np.float32))
+
+
+SHIFT_STEP_MM = 0.02    # shift map resolution; one byte holds 0-5.1 mm
+
+
+def write_shift_map(mesh, shift, outdir, name):
+    """shift/<name>.bin: one byte per triangle corner, in the order an STL of
+    this mesh lists them (cell order), value * SHIFT_STEP_MM = shift in mm."""
+    from reconstruction import mesh_arrays
+    faces = mesh_arrays(mesh)[1]
+    vals = np.clip(np.round(np.asarray(shift)[faces].ravel() / SHIFT_STEP_MM), 0, 255).astype(np.uint8)
+    os.makedirs(os.path.join(outdir, 'shift'), exist_ok=True)
+    vals.tofile(os.path.join(outdir, 'shift', f'{name}.bin'))
+
+
 # ── storage: one accuracy.json per dataset, next to report.json ─────────
 
 FIELDS = ('recon_assd_mm', 'recon_p95_mm', 'recon_signed_mm', 'volume_change_pct', 'watertight', 'pieces')

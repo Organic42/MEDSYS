@@ -389,6 +389,15 @@
               <div class="togrow"><span>Cut the model at a scan slice</span><label class="switch"><input type="checkbox" id="sliceOn" aria-label="Show CT slice"><i></i></label></div>
               <div class="range"><input type="range" id="slicePos" min="0" max="1" step="1" value="0" aria-label="Slice position"><output id="sliceOut">—</output></div>
             </div>
+            <div class="lbl">Tools</div>
+            <div class="togrow"><span>Accuracy colour map</span><label class="switch"><input type="checkbox" id="shiftOn" aria-label="Accuracy colour map"><i></i></label></div>
+            <div id="shiftLegend" style="display:none; font-size:12px; line-height:1.4; margin:2px 0 8px">
+              <div style="height:8px; border-radius:4px; background:linear-gradient(90deg,#2E9E5B 0%,#2E9E5B 33%,#E3A21A 66%,#D6453D 100%)"></div>
+              <div style="display:flex; justify-content:space-between"><span>0</span><span>0.5</span><span>1.0</span><span>≥1.5 mm</span></div>
+              <div class="muted">Shift of the surface from the AI outline, measured on this model. Grey: not measured.</div>
+            </div>
+            <div class="togrow"><span>Measure distance</span><label class="switch"><input type="checkbox" id="measureOn" aria-label="Measure distance"><i></i></label></div>
+            <div id="measureOut" class="muted" style="display:none; font-size:12px; margin:2px 0 8px">Click two points on the model.</div>
             <div class="lbl">Background</div>
             <div class="swatches">
               <button class="swatch" data-bg="" aria-pressed="true" title="Studio" aria-label="Studio background" style="background:radial-gradient(circle,#fff,#E6E4DF)"></button>
@@ -540,6 +549,108 @@ function resize(){
 new ResizeObserver(resize).observe(host);
 window.addEventListener('resize', resize);
 resize();
+// ---------- accuracy colour map ----------
+// shift/<name>.bin holds, per STL triangle corner, how far the delivered
+// surface lies from the AI's raw outline (one byte, 0.02 mm steps). It is
+// attached before vertices are merged; identical corners carry identical values.
+async function shiftMap(ds, path, corners){
+  try{
+    const r = await fetch(`/output/${encodeURIComponent(ds.name)}/shift/${encodeURIComponent(path.split('/').pop().replace(/\.stl$/i, '.bin'))}`);
+    if (!r.ok) return null;
+    const b = new Uint8Array(await r.arrayBuffer());
+    if (b.length !== corners) return null;
+    return Float32Array.from(b, v => v * 0.02);
+  }catch(_){ return null; }
+}
+let SHIFT_ON = false;
+const SHIFT_STOPS = [[0, '#2E9E5B'], [0.5, '#2E9E5B'], [1.0, '#E3A21A'], [1.5, '#D6453D']].map(([v, c]) => [v, new THREE.Color(c)]);
+function shiftColour(mm, out){
+  if (mm >= 1.5) return out.copy(SHIFT_STOPS[3][1]);
+  for (let i = 1; i < SHIFT_STOPS.length; i++){
+    const [v1, c1] = SHIFT_STOPS[i], [v0, c0] = SHIFT_STOPS[i - 1];
+    if (mm <= v1) return out.copy(c0).lerp(c1, v1 > v0 ? (mm - v0) / (v1 - v0) : 0);
+  }
+  return out.copy(SHIFT_STOPS[3][1]);
+}
+function applyShift(){
+  const c = new THREE.Color();
+  for (const p of parts.values()){
+    if (!p.mat || !p.full) continue;
+    const s = p.full.getAttribute('shift');
+    if (SHIFT_ON && s && !p.full.getAttribute('color')){
+      const col = new Float32Array(s.count * 3);
+      for (let i = 0; i < s.count; i++){ shiftColour(s.getX(i), c); col[3*i] = c.r; col[3*i+1] = c.g; col[3*i+2] = c.b; }
+      p.full.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    }
+    const mapped = SHIFT_ON && !!s;
+    p.mat.vertexColors = mapped;
+    p.mat.color.set(mapped ? '#ffffff' : SHIFT_ON ? '#9AA3AD' : p.color);
+    p.mat.needsUpdate = true;
+  }
+  invalidate();
+}
+$('shiftOn').addEventListener('change', e => {
+  SHIFT_ON = e.target.checked; $('shiftLegend').style.display = SHIFT_ON ? '' : 'none';
+  if (SHIFT_ON && RENDER !== 'surface'){ document.querySelector('input[name=render][value=surface]').click(); }
+  applyShift();
+});
+
+// ---------- measuring tool: straight-line distance between two surface points ----------
+const MEASURE = {on:false, pts:[], objs:[], label:null};
+const raycaster = new THREE.Raycaster();
+function measureClear(){
+  for (const o of MEASURE.objs){ group.remove(o); o.geometry.dispose(); o.material.dispose(); }
+  MEASURE.objs = []; MEASURE.pts = [];
+  if (MEASURE.label) MEASURE.label.style.display = 'none';
+  invalidate();
+}
+function measureMarker(pt){
+  const r = Math.max(0.8, cam.position.distanceTo(ctrl.target) / 300);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshBasicMaterial({color:'#FF7A18', depthTest:false}));
+  m.position.copy(pt); m.renderOrder = 20; group.add(m); MEASURE.objs.push(m);
+}
+function measureLabelPos(){
+  if (!MEASURE.label || MEASURE.pts.length !== 2) return;
+  const mid = MEASURE.pts[0].clone().add(MEASURE.pts[1]).multiplyScalar(.5);
+  const v = group.localToWorld(mid).project(cam), r = renderer.domElement.getBoundingClientRect(), h = $('stage').getBoundingClientRect();
+  MEASURE.label.style.left = `${(v.x + 1) / 2 * r.width + r.left - h.left}px`;
+  MEASURE.label.style.top = `${(1 - v.y) / 2 * r.height + r.top - h.top}px`;
+}
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!MEASURE.on || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  raycaster.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), cam);
+  const targets = [...parts.values()].filter(p => p.mesh && p.mesh.visible).map(p => p.mesh);
+  const hit = raycaster.intersectObjects(targets, false).find(h => !(SLICE.on && SLICE.vol) || h.point.z <= clipPlane.constant);
+  if (!hit) return;
+  if (MEASURE.pts.length === 2) measureClear();
+  const pt = group.worldToLocal(hit.point.clone());
+  MEASURE.pts.push(pt); measureMarker(pt);
+  if (MEASURE.pts.length === 2){
+    const g = new THREE.BufferGeometry().setFromPoints(MEASURE.pts);
+    const line = new THREE.Line(g, new THREE.LineBasicMaterial({color:'#FF7A18', depthTest:false}));
+    line.renderOrder = 20; group.add(line); MEASURE.objs.push(line);
+    const d = MEASURE.pts[0].distanceTo(MEASURE.pts[1]);
+    if (!MEASURE.label){
+      MEASURE.label = document.createElement('div');
+      MEASURE.label.style.cssText = 'position:absolute;transform:translate(-50%,-140%);background:#1F2933;color:#fff;font:600 13px var(--mono);padding:3px 8px;border-radius:6px;pointer-events:none;z-index:5';
+      $('stage').appendChild(MEASURE.label);
+    }
+    MEASURE.label.textContent = `${d.toFixed(1)} mm`; MEASURE.label.style.display = '';
+    $('measureOut').textContent = `Distance: ${d.toFixed(1)} mm. Click again to start a new measurement.`;
+  } else {
+    $('measureOut').textContent = 'Now click a second point.';
+  }
+  invalidate();
+});
+$('measureOn').addEventListener('change', e => {
+  MEASURE.on = e.target.checked; $('measureOut').style.display = MEASURE.on ? '' : 'none';
+  $('measureOut').textContent = 'Click two points on the model.';
+  if (!MEASURE.on) measureClear();
+});
+
 // ---------- CT slice-through: the scan at one level, models cut above it ----------
 // Lets a clinician check that each model's edge sits on the organ's edge in
 // the original image. ct_preview.* is written by the TotalSegmentator route.
@@ -655,6 +766,7 @@ setInterval(invalidate, 400);
   sliceGroup.position.copy(group.position);
   if (SLICE.plane) clipPlane.constant = SLICE.plane.position.z + group.position.z;
   renderer.render(scene, cam);
+  measureLabelPos();
 })();
 
 function clearModel(){
@@ -788,11 +900,14 @@ function loadModel(ds){
   };
   ds.meshes.forEach(path => {
     const label = labelOf(path);
-    loader.load(`/output/${encodeURIComponent(ds.name)}/${path}`, geo => {
+    loader.load(`/output/${encodeURIComponent(ds.name)}/${path}`, async geo => {
       if (token !== loadToken){ geo.dispose(); return; }
       // STL repeats every vertex per triangle, so per-vertex normals would be
       // per-face (faceted). Merge shared vertices first for smooth shading.
       geo.deleteAttribute('normal');
+      const shift = await shiftMap(ds, path, geo.attributes.position.count);
+      if (token !== loadToken){ geo.dispose(); return; }
+      if (shift) geo.setAttribute('shift', new THREE.Float32BufferAttribute(shift, 1));
       const smooth = mergeVertices(geo, 1e-4); geo.dispose();
       smooth.computeVertexNormals();
       const p = parts.get(label);
@@ -803,6 +918,7 @@ function loadModel(ds){
       if (SOFTWARE_GL || RENDER !== 'surface') setTimeout(applyDetail);
       p.mesh = mesh; p.mat = mat; mesh.visible = p.visible;
       if (SLICE.on && SLICE.vol) mat.clippingPlanes = [clipPlane];
+      if (SHIFT_ON) setTimeout(applyShift);
       styleMaterial(p);
       finish();
     }, undefined, () => { if (token === loadToken){ failed++; finish(); } });
@@ -1092,6 +1208,7 @@ function selectDataset(name){
   $('stageSub').textContent = r.engine ? `${r.engine}${r.fast_mode ? ' · fast' : ''}` : '';
   showView('3d');
   loadToken++;              // drop any meshes still arriving for the previous scan
+  measureClear();
   clearModel();
   buildDatasetCard(ds); buildStructures(ds); buildMetrics(ds); buildAccuracy(ds); buildThumbs(ds);
   $('checks').innerHTML = '<p class="muted">Runs once the model loads.</p>'; $('checkState').textContent = '';
