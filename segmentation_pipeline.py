@@ -147,24 +147,77 @@ def detect_modality(ds, override=None):
 # SHARED: mesh building / rendering
 # ════════════════════════════════════════════════════════════════════════
 
+# Surface finish for every mesh this run builds: 'standard' (the validated
+# production settings) or 'smooth' (presentation quality; see _smooth_field).
+FINISH = 'standard'
+SMOOTH_MAX_VOXELS = 12_000_000   # cap on one structure's upsampled field
+SMOOTH_MAX_FACES = 8_000         # cap on one structure's smooth mesh
+
+
+def _smooth_field(mask, spacing):
+    """A smooth scalar field for a presentation-quality surface.
+
+    Thick slices give the staircase look: a 5 mm slice is a 5 mm step. The
+    mask is cropped to its structure, blurred by half a voxel on every axis,
+    then upsampled with cubic interpolation to a near-isotropic grid (the
+    finest in-plane spacing, at least 0.6 mm, capped at SMOOTH_MAX_VOXELS),
+    so the 0.5 isosurface interpolates between slices instead of stepping.
+    Returns (field, spacing, origin), origin in world mm for the crop.
+    """
+    idx = np.argwhere(mask)
+    lo = np.maximum(idx.min(0) - 3, 0)
+    hi = np.minimum(idx.max(0) + 4, mask.shape)
+    sub = gaussian_filter(mask[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]].astype(np.float32), 0.5)
+    sp = np.asarray(spacing, dtype=float)
+    zoom = sp / max(float(sp.min()), 0.6)
+    n = float(np.prod(np.asarray(sub.shape) * zoom))
+    if n > SMOOTH_MAX_VOXELS:
+        zoom = zoom * (SMOOTH_MAX_VOXELS / n) ** (1 / 3)
+    zoom = np.maximum(zoom, 1.0)
+    up = ndimage.zoom(sub, zoom, order=3, grid_mode=False)
+    new_sp = sp * (np.asarray(sub.shape) - 1) / np.maximum(np.asarray(up.shape) - 1, 1)
+    return up, tuple(float(v) for v in new_sp), tuple(float(v) for v in lo * sp)
+
+
 def build_mesh(mask, spacing, sigma=0.6, taubin_iter=30, reduction=0.5,
-               min_voxels=200):
+               min_voxels=200, finish=None):
     """Binary mask -> smoothed, decimated PyVista surface mesh.
 
     These are the production defaults; call sites override them per structure.
     The reconstruction itself lives in reconstruction.py, so research
     experiments exercise exactly this code path. Blur here is in voxels.
+
+    finish='smooth' (or FINISH) builds a presentation-quality surface from an
+    upsampled field instead. The accuracy estimate still compares the mesh
+    with the raw mask, so the card shows what the extra smoothing cost.
     """
     if mask.sum() < min_voxels:
         return None
-    params = ReconParams(
-        blur_sigma_vox=(sigma, sigma, sigma) if np.isscalar(sigma) else tuple(sigma),
-        isosurface='lewiner', taubin_iter=taubin_iter, decimation=reduction)
+    finish = finish or FINISH
     try:
-        verts, faces = extract_isosurface(mask, spacing, params)
+        if finish == 'smooth':
+            field, fsp, origin = _smooth_field(mask, spacing)
+            params = ReconParams(isosurface='lewiner', taubin_iter=60,
+                                 taubin_pass_band=0.02, decimation=0.0)
+            verts, faces = extract_isosurface(field, fsp, params, origin=origin)
+            mesh = postprocess_surface(verts, faces, params)
+            # A smooth surface keeps its look with far fewer triangles; cap each
+            # structure so a whole study stays light enough to rotate smoothly.
+            if mesh.n_cells > SMOOTH_MAX_FACES:
+                mesh = mesh.decimate(1 - SMOOTH_MAX_FACES / mesh.n_cells)
+            return _finish_mesh(mesh, mask, spacing)
+        else:
+            params = ReconParams(
+                blur_sigma_vox=(sigma, sigma, sigma) if np.isscalar(sigma) else tuple(sigma),
+                isosurface='lewiner', taubin_iter=taubin_iter, decimation=reduction)
+            verts, faces = extract_isosurface(mask, spacing, params)
     except Exception:
         return None
-    mesh = postprocess_surface(verts, faces, params)
+    return _finish_mesh(postprocess_surface(verts, faces, params), mask, spacing)
+
+
+def _finish_mesh(mesh, mask, spacing):
+    """Normals, then the accuracy estimate against the raw mask."""
     mesh = mesh.compute_normals(cell_normals=False, point_normals=True,
                                 auto_orient_normals=True, consistent_normals=True)
     if config.ACCURACY:
@@ -177,11 +230,25 @@ def build_mesh(mask, spacing, sigma=0.6, taubin_iter=30, reduction=0.5,
     return mesh
 
 
+LITE_MAX_FACES = 2_000
+
+
+def save_lite(mesh, outdir, name):
+    """A light copy (lite/<name>.stl) the viewer uses for wireframe and X-ray,
+    where full detail only costs frame rate. Display only: never measured."""
+    lite = mesh.triangulate()
+    if lite.n_cells > LITE_MAX_FACES:
+        lite = lite.decimate(1 - LITE_MAX_FACES / lite.n_cells)
+    os.makedirs(os.path.join(outdir, 'lite'), exist_ok=True)
+    lite.save(os.path.join(outdir, 'lite', f'{name}.stl'))
+
+
 def save_mesh(mesh, outdir, name, record=True):
     import pyvista as pv
     for ext in ('vtk', 'stl', 'ply'):
         mesh.save(os.path.join(outdir, f'{name}.{ext}'))
     pv.save_meshio(os.path.join(outdir, f'{name}.obj'), mesh)
+    save_lite(mesh, outdir, name)
     if record:
         accuracy.record(mesh, outdir, name)
 
@@ -283,7 +350,7 @@ def _dicom_to_nifti(input_dir, work_dir):
     return max(niis, key=os.path.getsize)
 
 
-def _mesh_structure(path, outdir):
+def _mesh_structure(path, outdir, finish='standard'):
     """Mesh one TotalSegmentator mask file and save it, or None if too small.
 
     Module-level so a process pool can run it. It never writes accuracy.json
@@ -296,7 +363,7 @@ def _mesh_structure(path, outdir):
     if mask.sum() < 200:
         return None
     zoom = tuple(float(z) for z in img.header.get_zooms()[:3])
-    mesh = build_mesh(mask, zoom, sigma=0.6, reduction=0.6, min_voxels=200)
+    mesh = build_mesh(mask, zoom, sigma=0.6, reduction=0.6, min_voxels=200, finish=finish)
     if mesh is None:
         return None
     save_mesh(mesh, outdir, name, record=False)
@@ -327,15 +394,44 @@ def mesh_structures(seg_files, outdir):
             from concurrent.futures import ProcessPoolExecutor
             with ProcessPoolExecutor(max_workers=workers,
                                      mp_context=multiprocessing.get_context('spawn')) as ex:
-                results = list(ex.map(_mesh_structure, seg_files, [outdir] * len(seg_files)))
+                results = list(ex.map(_mesh_structure, seg_files, [outdir] * len(seg_files),
+                                       [FINISH] * len(seg_files)))
             print(f"  meshed in {workers} processes", flush=True)
         except Exception as e:  # noqa: BLE001  (the pool is an optimisation, never a requirement)
             print(f"  parallel meshing failed ({e}); meshing one by one", flush=True)
     if results is None:
-        results = [_mesh_structure(f, outdir) for f in seg_files]
+        results = [_mesh_structure(f, outdir, FINISH) for f in seg_files]
     done = [r for r in results if r]
     accuracy.record_entries(outdir, [(r['name'], *r['accuracy']) for r in done if r['accuracy']])
     return done
+
+
+def save_ct_preview(nifti, outdir, modality='CT', max_dim=256):
+    """Save a light copy of the scan for the viewer's slice-through view.
+
+    The volume is subsampled in-plane (every f-th voxel, so voxel i of the copy
+    is voxel i*f of the original and lines up exactly with the meshes, whose
+    coordinates are index * spacing) and stored as 8-bit, slice-major:
+    ct_preview.bin plus ct_preview.json describing shape and step in mm.
+    """
+    import math
+    import nibabel as nib
+    img = nib.load(nifti)
+    vol = np.asanyarray(img.dataobj)
+    if vol.ndim > 3:
+        vol = vol[..., 0]
+    sx, sy, sz = (float(z) for z in img.header.get_zooms()[:3])
+    f = max(1, math.ceil(max(vol.shape[0], vol.shape[1]) / max_dim))
+    sub = np.asarray(vol[::f, ::f, :], dtype=np.float32)
+    if modality == 'CT':
+        lo, hi = -1000.0, 1000.0
+    else:
+        lo, hi = (float(v) for v in np.percentile(sub, [1, 99]))
+    u8 = np.clip((sub - lo) / max(hi - lo, 1e-6) * 255, 0, 255).astype(np.uint8)
+    np.ascontiguousarray(u8.transpose(2, 1, 0)).tofile(os.path.join(outdir, 'ct_preview.bin'))
+    with open(os.path.join(outdir, 'ct_preview.json'), 'w') as fh:
+        json.dump({'shape': list(u8.shape), 'step_mm': [f * sx, f * sy, sz],
+                   'modality': modality, 'range': [lo, hi]}, fh)
 
 
 def run_totalseg(input_dir, outdir, modality='CT', fast=True):
@@ -351,6 +447,10 @@ def run_totalseg(input_dir, outdir, modality='CT', fast=True):
     print("[1/4] Converting DICOM to NIfTI...")
     work = os.path.join(outdir, '_work')
     nifti = _dicom_to_nifti(input_dir, work)
+    try:
+        save_ct_preview(nifti, outdir, modality)
+    except Exception as e:  # noqa: BLE001  (a preview must never cost a run)
+        print(f"  slice preview skipped: {e}", flush=True)
     sw.lap('DICOM->NIfTI')
 
     # 2. Run TotalSegmentator (one mask file per structure)
@@ -384,7 +484,7 @@ def run_totalseg(input_dir, outdir, modality='CT', fast=True):
         render_meshes(mesh_specs[:40], outdir, 'step1_anatomy.png',
                       f'TotalSegmentator — {len(structures)} structures')
     report = {'modality': modality, 'engine': 'TotalSegmentator',
-              'device': dev_name, 'fast_mode': fast, 'gpu_worker': on_worker,
+              'device': dev_name, 'fast_mode': fast, 'finish': FINISH, 'gpu_worker': on_worker,
               'num_structures': len(structures),
               'runtime_sec': round(sw.total(), 1),
               'structures': structures}
@@ -878,7 +978,11 @@ def main():
                     help="Segmentation engine: fast heuristic or TotalSegmentator (DL)")
     ap.add_argument('--no-fast', action='store_true',
                     help="TotalSegmentator full resolution (1.5mm) instead of fast (3mm)")
+    ap.add_argument('--finish', choices=['standard', 'smooth'], default='standard',
+                    help="Surface finish: validated standard, or smooth (presentation)")
     args = ap.parse_args()
+    global FINISH
+    FINISH = args.finish
 
     outdir = os.path.join(OUTPUT_ROOT, args.name)
     os.makedirs(outdir, exist_ok=True)

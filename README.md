@@ -77,6 +77,23 @@ Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segment
 
 <sub>The current workbench on a public chest CT (TCIA sample): the accuracy estimate card on the right shows the resolution limit, the smoothing shift, the engine's validated error and the watertight count.</sub>
 
+### Mid-body reconstruction (November 2026)
+
+<img src="docs/images/midbody-cardiac.jpg" alt="Chest CT reconstructed by MEDSYS: full anatomy with ribcage, organs without bones, and the heart with aorta and great vessels from the front and an oblique view" width="100%">
+
+<sub>A public contrast-enhanced chest CT (CT-ORG case 90, 0.8 mm slices; TCIA, CC BY 4.0) in full-detail mode with the smooth finish: 88 structures. From left: full anatomy, organs without bones, heart and great vessels from the front and from an oblique view.</sub>
+
+| | |
+|---|---|
+| **Smooth finish** | An optional presentation finish interpolates thick slices instead of stepping between them (a cropped, upsampled field before marching cubes), then caps each structure at 8,000 triangles. On the chest CT above the median shift from the segmentation surface was 0.25 mm, no worse than the standard finish (0.30–0.32 mm on the 5 mm sample), and the accuracy card still reports it for every model |
+| **Full detail** | TotalSegmentator at 1.5 mm can be chosen at upload, next to the fast 3 mm mode |
+| **CT slice view** | The original scan at any level inside the 3D view, with each model's outline drawn in its colour where it crosses the slice, so the fit can be checked against the image |
+| **Viewer** | Smooth shading, studio lighting and anatomical colours; light copies of each model (at most 2,000 triangles) for wireframe and X-ray; rendering only when the view changes; automatic light models in browsers without graphics acceleration |
+
+<img src="docs/images/ct-slice-overlay.jpg" alt="CT slice through the chest at heart level inside the 3D view, with coloured outlines of the reconstructed structures" width="60%">
+
+<sub>The CT slice view at heart level.</sub>
+
 <img src="docs/images/explorer.png" alt="Neuroplasticity Explorer answering how regular exercise changes the brain, with four highlighted regions and their evidence" width="100%">
 
 <sub>The Neuroplasticity Explorer: asking how regular exercise changes the brain highlights the four regions most affected and tags each finding by the strength of its evidence.</sub>

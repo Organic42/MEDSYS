@@ -25,7 +25,8 @@ def _base_cmd():
 
 
 def run_segmentation(job_id, input_dir, name, modality=None,
-                     no_medsam=False, engine='heuristic'):
+                     no_medsam=False, engine='heuristic', full_detail=False,
+                     finish='standard'):
     jobstore.update(job_id, status='running', message='Starting pipeline...')
     cmd = _base_cmd() + ['--input', input_dir, '--name', name]
     if modality:
@@ -34,6 +35,10 @@ def run_segmentation(job_id, input_dir, name, modality=None,
         cmd += ['--no-medsam']
     if engine == 'totalseg':
         cmd += ['--engine', 'totalseg']
+        if full_detail:
+            cmd += ['--no-fast']
+    if finish == 'smooth':
+        cmd += ['--finish', 'smooth']
 
     try:
         env = dict(os.environ, PYTHONIOENCODING='utf-8')

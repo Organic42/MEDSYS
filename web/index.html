@@ -329,6 +329,16 @@
               <option value="totalseg" id="engineTotalseg">TotalSegmentator</option>
             </select></label>
           <p id="engineNote" class="note" style="display:none;margin-top:6px">TotalSegmentator isn't installed on this deployment.</p>
+          <label class="field">Detail (TotalSegmentator)
+            <select id="detail">
+              <option value="fast">Fast (3 mm)</option>
+              <option value="full">Full (1.5 mm, slower)</option>
+            </select></label>
+          <label class="field">Surface finish
+            <select id="finish">
+              <option value="standard">Standard</option>
+              <option value="smooth">Smooth (presentation)</option>
+            </select></label>
           <label class="field">Modality
             <select id="modality">
               <option value="">Auto-detect</option>
@@ -374,6 +384,11 @@
             </div>
             <div class="lbl">Opacity</div>
             <div class="range"><input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1" aria-label="Opacity"><output id="opacityOut">1.0</output></div>
+            <div id="sliceCtl" style="display:none">
+              <div class="lbl">CT slice</div>
+              <div class="togrow"><span>Cut the model at a scan slice</span><label class="switch"><input type="checkbox" id="sliceOn" aria-label="Show CT slice"><i></i></label></div>
+              <div class="range"><input type="range" id="slicePos" min="0" max="1" step="1" value="0" aria-label="Slice position"><output id="sliceOut">—</output></div>
+            </div>
             <div class="lbl">Background</div>
             <div class="swatches">
               <button class="swatch" data-bg="" aria-pressed="true" title="Studio" aria-label="Studio background" style="background:radial-gradient(circle,#fff,#E6E4DF)"></button>
@@ -429,6 +444,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -436,20 +452,33 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 // ---------- anatomy: category + colour ----------
 // Brand anatomy palette, matched by structure name. Order matters: vessels
 // are tested before lungs so "pulmonary_vein" is a vessel, not lung.
+// Anatomical palette (textbook convention): oxygenated vessels red,
+// deoxygenated blue, ivory bone, natural organ tones.
 const ANATOMY = [
   ['Tumour',  /tumou?r|hotspot|lesion/, '#F2B632'],
-  ['Vessels', /aorta|arter|vein|vena|vessel|portal|brachiocephalic_trunk/, '#4F91D9'],
-  ['Heart',   /heart|atrial|ventric|myocard/, '#E66A6A'],
-  ['Lungs',   /lung/, '#73C8D0'],
-  ['Liver',   /liver/, '#C58A68'],
-  ['Bone',    /skeleton|bone|rib|vertebra|clavic|scapula|humerus|sternum|costal|femur|hip|sacrum|skull|tibia|fibula|ulna/, '#E5D5B8'],
+  ['Vessels', /pulmonary_vein|pulmonary_venous/, '#C3343B'],
+  ['Vessels', /pulmonary_artery|pulmonary_trunk/, '#3E6DB5'],
+  ['Vessels', /vein|vena|portal/, '#3E6DB5'],
+  ['Vessels', /aorta|arter|vessel|brachiocephalic_trunk/, '#C3343B'],
+  ['Heart',   /heart|atri|ventric|myocard/, '#A8413F'],
+  ['Lungs',   /lung/, '#E9B3AE'],
+  ['Liver',   /liver/, '#8E3B2F'],
+  ['Bone',    /costal_cartilage/, '#D8E0E3'],
+  ['Bone',    /skeleton|bone|rib|vertebra|clavic|scapula|humerus|sternum|femur|hip|sacrum|skull|tibia|fibula|ulna/, '#EDE3CB'],
 ];
-// Not in the brand palette: muted extensions chosen to sit alongside it.
+// Organs outside the main groups, in natural tones.
 const EXTRA = {
   body:['Context','#D9D6CF'], uptake_region:['Context','#F2B632'], soft_tissue:['Soft tissue','#E8C9B5'],
   brain_surface:['Brain','#C9C2D6'], gray_matter:['Brain','#D9A9A4'], white_matter:['Brain','#F1E7D8'],
+  spleen:['Other organs','#7B3448'], kidney_left:['Other organs','#9A4436'], kidney_right:['Other organs','#9A4436'],
+  pancreas:['Other organs','#E2BE78'], gallbladder:['Other organs','#5E8B4C'], stomach:['Other organs','#D99A8A'],
+  esophagus:['Other organs','#CF8E7C'], small_bowel:['Other organs','#E3B09E'], colon:['Other organs','#CDA18A'],
+  duodenum:['Other organs','#DDA690'], trachea:['Other organs','#D8E0E3'], spinal_cord:['Other organs','#F1E3B0'],
+  adrenal_gland_left:['Other organs','#D8B15A'], adrenal_gland_right:['Other organs','#D8B15A'],
+  thyroid_gland:['Other organs','#B8615A'], urinary_bladder:['Other organs','#E2C27A'],
 };
-const FALLBACK = ['#8FA3B8','#B4A0CF','#8CC0A0','#D79AAE','#C9A86A','#7FB6C9','#A9B57F','#B8A89A'];
+const FALLBACK = ['#B0645A','#C08A7A','#A8554B','#D3A28F','#9E6B5C','#C7948A','#B5786A','#A97F6E'];
+const CAT_OPACITY = {};            // per-category opacity factor (none by default)
 const CAT_ORDER = ['Tumour','Lungs','Heart','Vessels','Liver','Bone','Brain','Soft tissue','Other organs','Context'];
 function anatomyOf(label){
   const n = label.toLowerCase();
@@ -485,11 +514,16 @@ const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 20000);
 const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
 renderer.setClearColor(0x000000, 0);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 host.appendChild(renderer.domElement);
 const ctrl = new OrbitControls(cam, renderer.domElement); ctrl.enableDamping = true;
-scene.add(new THREE.AmbientLight(0xffffff, .55));
-const key = new THREE.DirectionalLight(0xffffff, .85); key.position.set(1, 1, 1); scene.add(key);
-const fillLight = new THREE.DirectionalLight(0xfff0e3, .35); fillLight.position.set(-1, -.5, -1); scene.add(fillLight);
+// Soft studio lighting: a room environment for reflections plus a key and rim
+// light. Display only: it never changes the geometry that is measured.
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7f78, .45));
+const key = new THREE.DirectionalLight(0xffffff, 1.1); key.position.set(1, 1.2, 1); scene.add(key);
+const fillLight = new THREE.DirectionalLight(0xfff0e3, .45); fillLight.position.set(-1, -.4, -1); scene.add(fillLight);
 const group = new THREE.Group(); scene.add(group);
 const loader = new STLLoader();
 const parts = new Map();          // label -> {mesh, mat, cat, color, row, check}
@@ -499,13 +533,129 @@ function resize(){
   const w = host.clientWidth, h = host.clientHeight;
   if (!w || !h) return;
   renderer.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix();
+  if (typeof invalidate === 'function') invalidate();
 }
 // The observer covers layout changes; the explicit calls cover pages that
 // load hidden (no observer callbacks until first render) and window resizes.
 new ResizeObserver(resize).observe(host);
 window.addEventListener('resize', resize);
 resize();
-(function loop(){ requestAnimationFrame(loop); ctrl.update(); renderer.render(scene, cam); })();
+// ---------- CT slice-through: the scan at one level, models cut above it ----------
+// Lets a clinician check that each model's edge sits on the organ's edge in
+// the original image. ct_preview.* is written by the TotalSegmentator route.
+renderer.localClippingEnabled = true;
+const sliceGroup = new THREE.Group(); scene.add(sliceGroup);
+const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+const SLICE = {vol:null, meta:null, plane:null, tex:null, k:0, on:false};
+function sliceClear(){
+  if (SLICE.lines){ sliceGroup.remove(SLICE.lines); SLICE.lines.geometry.dispose(); SLICE.lines.material.dispose(); }
+  if (SLICE.plane){ sliceGroup.remove(SLICE.plane); SLICE.plane.geometry.dispose(); SLICE.plane.material.dispose(); SLICE.tex.dispose(); }
+  Object.assign(SLICE, {vol:null, meta:null, plane:null, tex:null, lines:null, k:0});
+  $('sliceCtl').style.display = 'none';
+  applyClip();
+}
+async function sliceLoad(ds, token){
+  sliceClear();
+  try{
+    const base = `/output/${encodeURIComponent(ds.name)}/ct_preview`;
+    const m = await fetch(base + '.json'); if (!m.ok) return;
+    const meta = await m.json();
+    const buf = await (await fetch(base + '.bin')).arrayBuffer();
+    if (token !== loadToken) return;
+    const [nx, ny, nz] = meta.shape, [dx, dy, dz] = meta.step_mm;
+    if (buf.byteLength !== nx * ny * nz) return;
+    SLICE.vol = new Uint8Array(buf); SLICE.meta = meta;
+    SLICE.tex = new THREE.DataTexture(new Uint8Array(nx * ny * 4), nx, ny, THREE.RGBAFormat);
+    SLICE.tex.colorSpace = THREE.SRGBColorSpace;
+    // Pixel centres sit on voxel centres, as mesh vertices do (index * spacing).
+    const geo = new THREE.PlaneGeometry(nx * dx, ny * dy);
+    SLICE.plane = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({map:SLICE.tex, side:THREE.DoubleSide, toneMapped:false}));
+    SLICE.plane.position.set((nx - 1) * dx / 2, (ny - 1) * dy / 2, 0);
+    SLICE.plane.visible = SLICE.on;
+    sliceGroup.add(SLICE.plane);
+    const s = $('slicePos'); s.max = nz - 1; s.value = Math.round(nz / 2);
+    $('sliceCtl').style.display = '';
+    sliceSet(+s.value);
+  }catch(e){ /* no preview for this dataset */ }
+}
+function sliceSet(k){
+  if (!SLICE.vol) return;
+  const [nx, ny, nz] = SLICE.meta.shape, dz = SLICE.meta.step_mm[2];
+  SLICE.k = k;
+  const px = SLICE.tex.image.data, off = k * nx * ny;
+  for (let i = 0, n = nx * ny; i < n; i++){ const v = SLICE.vol[off + i]; px[4*i] = px[4*i+1] = px[4*i+2] = v; px[4*i+3] = 255; }
+  SLICE.tex.needsUpdate = true;
+  SLICE.plane.position.z = k * dz;
+  $('sliceOut').textContent = `${k + 1}/${nz}`;
+  sliceOutlines();
+}
+// Where each visible model crosses the slice, drawn in its colour on the scan:
+// the model's edge should sit on the organ's edge in the image.
+function sliceOutlines(){
+  if (SLICE.lines){ sliceGroup.remove(SLICE.lines); SLICE.lines.geometry.dispose(); SLICE.lines.material.dispose(); SLICE.lines = null; }
+  if (!SLICE.on || !SLICE.plane) return;
+  const zs = SLICE.plane.position.z, pos = [], col = [], c = new THREE.Color();
+  for (const p of parts.values()){
+    if (!p.mesh || !p.mesh.visible) continue;
+    const g = p.mesh.geometry, P = g.attributes.position.array, I = g.index ? g.index.array : null;
+    const n = I ? I.length : P.length / 3;
+    c.set(p.color);
+    for (let t = 0; t < n; t += 3){
+      const a = I ? I[t] : t, b = I ? I[t+1] : t+1, d = I ? I[t+2] : t+2;
+      const za = P[3*a+2] - zs, zb = P[3*b+2] - zs, zc = P[3*d+2] - zs;
+      if ((za > 0 && zb > 0 && zc > 0) || (za < 0 && zb < 0 && zc < 0)) continue;
+      const pts = [];
+      for (const [u, v, zu, zv] of [[a, b, za, zb], [b, d, zb, zc], [d, a, zc, za]]){
+        if ((zu > 0) === (zv > 0) || zu === zv) continue;
+        const f = zu / (zu - zv);
+        pts.push(P[3*u] + f * (P[3*v] - P[3*u]), P[3*u+1] + f * (P[3*v+1] - P[3*u+1]), zs + .2);
+      }
+      if (pts.length === 6){ pos.push(...pts); col.push(c.r, c.g, c.b, c.r, c.g, c.b); }
+    }
+  }
+  if (!pos.length) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  SLICE.lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({vertexColors:true, depthTest:false, toneMapped:false}));
+  SLICE.lines.renderOrder = 10;
+  sliceGroup.add(SLICE.lines);
+}
+function applyClip(){
+  const planes = SLICE.on && SLICE.vol ? [clipPlane] : [];
+  for (const p of parts.values()) if (p.mat){ p.mat.clippingPlanes = planes; p.mat.needsUpdate = true; }
+}
+$('sliceOn').addEventListener('change', e => {
+  SLICE.on = e.target.checked; if (SLICE.plane) SLICE.plane.visible = SLICE.on; applyClip(); sliceOutlines();
+});
+$('slicePos').addEventListener('input', e => sliceSet(+e.target.value));
+
+// Fixed camera angles for documentation snapshots (research/snapshots.py):
+// azimuth around the scan's long axis, elevation above it, head pointing up.
+window.medsysView = (azDeg, elDeg = 0) => {
+  const d = cam.position.distanceTo(ctrl.target), a = THREE.MathUtils.degToRad(azDeg), e = THREE.MathUtils.degToRad(elDeg);
+  ctrl.enabled = false; cam.up.set(0, 0, 1);
+  cam.position.set(d * Math.cos(e) * Math.cos(a), d * Math.cos(e) * Math.sin(a), d * Math.sin(e)).add(ctrl.target);
+  cam.lookAt(ctrl.target); renderer.render(scene, cam);
+};
+
+// Render on demand: only when the view or the scene changed, and never while
+// the Renders tab covers the 3D view. Any input on the page counts as a change,
+// and a slow heartbeat catches anything else (meshes arriving, layout).
+var dirty = true;                 // var: invalidate() can run before this line
+function invalidate(){ dirty = true; }
+ctrl.addEventListener('change', invalidate);
+for (const ev of ['input', 'change', 'click', 'pointerup', 'wheel', 'keyup']) document.addEventListener(ev, invalidate, true);
+setInterval(invalidate, 400);
+(function loop(){
+  requestAnimationFrame(loop);
+  if (ctrl.enabled && ctrl.update()) dirty = true;
+  if (!dirty || $('stage').classList.contains('images')) return;
+  dirty = false;
+  sliceGroup.position.copy(group.position);
+  if (SLICE.plane) clipPlane.constant = SLICE.plane.position.z + group.position.z;
+  renderer.render(scene, cam);
+})();
 
 function clearModel(){
   for (const p of parts.values()){
@@ -533,17 +683,47 @@ function styleMaterial(p){
   if (!p.mat) return;
   const ctx = p.cat === 'Context';
   const xray = RENDER === 'xray';
-  const op = ctx ? .18 : xray ? .28 * OPACITY : OPACITY;
+  const op = ctx ? .18 : (xray ? .28 * OPACITY : OPACITY) * (CAT_OPACITY[p.cat] ?? 1);
   p.mat.wireframe = RENDER === 'wireframe';
   p.mat.transparent = op < 1;
   p.mat.opacity = op;
-  p.mat.depthWrite = !(ctx || xray);
+  p.mat.depthWrite = !(ctx || xray || op < 1);
   p.mat.side = xray ? THREE.DoubleSide : THREE.FrontSide;
   p.mat.needsUpdate = true;
 }
 document.querySelectorAll('input[name=render]').forEach(r => r.addEventListener('change', e => {
   RENDER = e.target.value; for (const p of parts.values()) styleMaterial(p);
+  applyDetail();
 }));
+// Wireframe and X-ray draw every triangle edge or layer, so they use each
+// model's light copy (lite/<name>.stl, display only); Surface uses full detail.
+// Without a GPU (Windows' Basic Render Driver, SwiftShader, llvmpipe) every
+// mode uses the light copies, and the hint says why the view is slow.
+const SOFTWARE_GL = (() => {
+  try{
+    const gl = renderer.getContext(), e = gl.getExtension('WEBGL_debug_renderer_info');
+    return /basic render|swiftshader|llvmpipe|software/i.test(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : '');
+  }catch(_){ return false; }
+})();
+if (SOFTWARE_GL) $('hint').textContent = 'No graphics acceleration in this browser: showing light models. Open MEDSYS in Chrome or Edge for full detail.';
+function applyDetail(){
+  const lite = SOFTWARE_GL || RENDER !== 'surface';
+  for (const p of parts.values()){
+    if (!p.mesh || !p.full) continue;
+    if (!lite){ p.mesh.geometry = p.full; continue; }
+    if (p.lite){ p.mesh.geometry = p.lite; continue; }
+    if (p.liteLoading || p.liteMissing) continue;
+    p.liteLoading = true;
+    loader.load(p.liteUrl, geo => {
+      geo.deleteAttribute('normal');
+      p.lite = mergeVertices(geo, 1e-4); geo.dispose(); p.lite.computeVertexNormals();
+      p.liteLoading = false;
+      if ((SOFTWARE_GL || RENDER !== 'surface') && p.mesh) p.mesh.geometry = p.lite;
+      invalidate();
+    }, undefined, () => { p.liteLoading = false; p.liteMissing = true; });
+  }
+  invalidate();
+}
 $('opacity').addEventListener('input', e => {
   OPACITY = +e.target.value; $('opacityOut').textContent = OPACITY.toFixed(1);
   for (const p of parts.values()) styleMaterial(p);
@@ -610,11 +790,19 @@ function loadModel(ds){
     const label = labelOf(path);
     loader.load(`/output/${encodeURIComponent(ds.name)}/${path}`, geo => {
       if (token !== loadToken){ geo.dispose(); return; }
-      geo.computeVertexNormals();
+      // STL repeats every vertex per triangle, so per-vertex normals would be
+      // per-face (faceted). Merge shared vertices first for smooth shading.
+      geo.deleteAttribute('normal');
+      const smooth = mergeVertices(geo, 1e-4); geo.dispose();
+      smooth.computeVertexNormals();
       const p = parts.get(label);
-      const mat = new THREE.MeshPhongMaterial({color:p.color, shininess:25, specular:0x1a1a1a});
-      const mesh = new THREE.Mesh(geo, mat); group.add(mesh);
+      const mat = new THREE.MeshStandardMaterial({color:p.color, roughness:.5, metalness:0, envMapIntensity:.8});
+      const mesh = new THREE.Mesh(smooth, mat); group.add(mesh);
+      p.full = smooth; p.lite = null; p.liteMissing = false;
+      p.liteUrl = `/output/${encodeURIComponent(ds.name)}/lite/${encodeURIComponent(path.split('/').pop())}`;
+      if (SOFTWARE_GL || RENDER !== 'surface') setTimeout(applyDetail);
       p.mesh = mesh; p.mat = mat; mesh.visible = p.visible;
+      if (SLICE.on && SLICE.vol) mat.clippingPlanes = [clipPlane];
       styleMaterial(p);
       finish();
     }, undefined, () => { if (token === loadToken){ failed++; finish(); } });
@@ -624,6 +812,7 @@ function loadModel(ds){
 // Topology from the triangles alone. STL repeats each vertex per triangle, so
 // positions are merged first (normals are dropped, or nothing would merge).
 function meshCheck(geo){
+  if (geo.index) geo = geo.toNonIndexed();     // display meshes are indexed
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', geo.getAttribute('position'));
   const m = mergeVertices(g, 1e-5);
@@ -907,6 +1096,7 @@ function selectDataset(name){
   buildDatasetCard(ds); buildStructures(ds); buildMetrics(ds); buildAccuracy(ds); buildThumbs(ds);
   $('checks').innerHTML = '<p class="muted">Runs once the model loads.</p>'; $('checkState').textContent = '';
   loadModel(ds);
+  sliceLoad(ds, loadToken);
 }
 async function loadDatasets(prefer){
   const sel = $('dsSelect');
@@ -1039,6 +1229,8 @@ goBtn.onclick = async () => {
   fd.append('modality', $('modality').value);
   fd.append('no_medsam', $('fast').checked ? '1' : '');
   fd.append('engine', $('engine').value);
+  fd.append('detail', $('detail').value);
+  fd.append('finish', $('finish').value);
   JOB_ACTIVE = true;
   setJob('running', 'Uploading…'); setStatus('running', 'Uploading', chosen.name);
   try{

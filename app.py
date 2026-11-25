@@ -36,8 +36,9 @@ else:
     _executor = ThreadPoolExecutor(max_workers=config.MAX_WORKERS)
 
 
-def _dispatch(job_id, extract_dir, name, modality, no_medsam, engine):
-    args = (job_id, extract_dir, name, modality, no_medsam, engine)
+def _dispatch(job_id, extract_dir, name, modality, no_medsam, engine,
+              full_detail=False, finish='standard'):
+    args = (job_id, extract_dir, name, modality, no_medsam, engine, full_detail, finish)
     if _queue is not None:
         _queue.enqueue('tasks.run_segmentation', *args,
                        job_timeout=config.JOB_TIMEOUT, job_id=job_id)
@@ -90,7 +91,8 @@ def ready():
 @app.post('/api/upload')
 async def upload(file: UploadFile = File(...), name: str = Form(None),
                  modality: str = Form(None), no_medsam: str = Form(None),
-                 engine: str = Form('heuristic'), x_visitor: str = Header(None)):
+                 engine: str = Form('heuristic'), detail: str = Form('fast'),
+                 finish: str = Form('standard'), x_visitor: str = Header(None)):
     if not file.filename.lower().endswith('.zip'):
         raise HTTPException(400, "Please upload a .zip of DICOM files")
     owner = None
@@ -135,7 +137,9 @@ async def upload(file: UploadFile = File(...), name: str = Form(None),
     if owner:
         publicdemo.mark(os.path.join(config.OUTPUT_ROOT, ds_name), owner)
     jobstore.create(job_id, ds_name, engine=engine)
-    _dispatch(job_id, extract_dir, ds_name, modality, bool(no_medsam), engine)
+    _dispatch(job_id, extract_dir, ds_name, modality, bool(no_medsam), engine,
+              full_detail=(detail == 'full'),
+              finish='smooth' if finish == 'smooth' else 'standard')
     return {'job_id': job_id, 'name': ds_name}
 
 
