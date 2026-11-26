@@ -6,6 +6,8 @@
   HIDE    structure groups to hide, e.g. "bone,other organs"
   TAG     text added to file names
   SLICE   slice level 0..1 to add a CT-slice snapshot (top view)
+  URL     workbench address (default http://localhost:8000)
+  GL      "gpu" renders on the graphics card (full-detail models); default software
 
 Opens the dataset directly by name, so no other dataset is ever shown.
 """
@@ -19,10 +21,11 @@ os.makedirs(out, exist_ok=True)
 angles = [a.split('=') for a in os.environ.get('ANGLES', 'front=270/0').split(',')]
 tag = os.environ.get('TAG', '')
 with sync_playwright() as pw:
-    b = pw.chromium.launch(channel='msedge', headless=True,
-                           args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
+    gl = (['--use-angle=d3d11', '--ignore-gpu-blocklist'] if os.environ.get('GL') == 'gpu'
+          else ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
+    b = pw.chromium.launch(channel='msedge', headless=True, args=gl)
     pg = b.new_page(viewport={'width': 1600, 'height': 1000}, device_scale_factor=2)
-    pg.goto(f'http://localhost:8000/#{ds}')
+    pg.goto(f"{os.environ.get('URL', 'http://localhost:8000')}/#{ds}")
     pg.reload()                                   # a hash-only change does not reload
     for _ in range(180):                          # until this dataset's meshes have loaded
         pg.wait_for_timeout(1000)
@@ -32,8 +35,9 @@ with sync_playwright() as pw:
     pg.wait_for_timeout(1500)
     pg.add_style_tag(content='#viewpanel,#hint{display:none!important}')
     for cat in filter(None, os.environ.get('HIDE', '').split(',')):
-        pg.evaluate(f"""() => {{ const c = document.querySelector('input[aria-label="Show {cat.strip()}"]');
-            if (c && c.checked) c.click(); }}""")
+        pg.evaluate(f"""() => {{ for (const r of document.querySelectorAll('.catrow')) {{
+            const n = r.querySelector('.catname'), c = r.querySelector('input');
+            if (n && c && c.checked && n.textContent.trim().toLowerCase() === '{cat.strip().lower()}') c.click(); }} }}""")
     stage = pg.locator('#stage')
     for name, ae in angles:
         az, el = (float(v) for v in ae.split('/'))

@@ -434,7 +434,56 @@ def save_ct_preview(nifti, outdir, modality='CT', max_dim=256):
     np.ascontiguousarray(u8.transpose(2, 1, 0)).tofile(os.path.join(outdir, 'ct_preview.bin'))
     with open(os.path.join(outdir, 'ct_preview.json'), 'w') as fh:
         json.dump({'shape': list(u8.shape), 'step_mm': [f * sx, f * sy, sz],
-                   'modality': modality, 'range': [lo, hi]}, fh)
+                   'modality': modality, 'range': [lo, hi],
+                   'axcodes': list(nib.aff2axcodes(img.affine))}, fh)
+
+
+HEART_TASK = 'heartchambers_highres'
+HEART_FILES = ('heart_myocardium', 'heart_atrium_left', 'heart_ventricle_left',
+               'heart_atrium_right', 'heart_ventricle_right', 'pulmonary_artery')
+
+
+def heart_chambers_available():
+    """The heart-chamber model needs a TotalSegmentator licence (free for
+    academic use, requested by the user and set with totalseg_set_license).
+    VRSEG_HEART_CHAMBERS=0 switches the step off."""
+    if os.environ.get('VRSEG_HEART_CHAMBERS', '1') == '0':
+        return False
+    for p in ('~/.totalsegmentator/config.json', '~/.totalseg/config.json'):
+        try:
+            with open(os.path.expanduser(p)) as fh:
+                if json.load(fh).get('license_number'):
+                    return True
+        except (OSError, ValueError):
+            pass
+    return False
+
+
+def run_heart_chambers(nifti, seg_dir):
+    """Run the high-resolution heart model and add its chambers, wall and
+    pulmonary artery to seg_dir. The aorta from the main run is kept."""
+    print("  Heart chambers (TotalSegmentator heartchambers_highres)...", flush=True)
+    tmp = os.path.join(seg_dir, '_heart')
+    os.makedirs(tmp, exist_ok=True)
+    try:
+        if not gpu_worker.run_totalseg(nifti, tmp, fast=False, task=HEART_TASK):
+            from totalsegmentator.python_api import totalsegmentator
+            dev, _ = get_device()
+            totalsegmentator(nifti, tmp, fast=False, ml=False, task=HEART_TASK, quiet=True,
+                             device='gpu' if dev == 'cuda' else 'cpu')
+        n = 0
+        for name in HEART_FILES:
+            src = os.path.join(tmp, f'{name}.nii.gz')
+            if os.path.exists(src):
+                shutil.move(src, os.path.join(seg_dir, f'{name}.nii.gz'))
+                n += 1
+        print(f"  {n} heart structures added", flush=True)
+        return n >= 5
+    except Exception as e:  # noqa: BLE001  (fall back to the single heart model)
+        print(f"  heart chambers skipped: {e}", flush=True)
+        return False
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def run_totalseg(input_dir, outdir, modality='CT', fast=True):
@@ -467,17 +516,30 @@ def run_totalseg(input_dir, outdir, modality='CT', fast=True):
         totalsegmentator(nifti, seg_dir, fast=fast, ml=False, device=ts_device,
                          task=task, quiet=True)
     sw.lap('segmentation')
+    chambers = False
+    if modality == 'CT' and heart_chambers_available():
+        chambers = run_heart_chambers(nifti, seg_dir)
+        sw.lap('heart chambers')
 
     # 3. Mesh every non-empty structure
     print("[3/4] Meshing structures...")
     import pyvista as pv
     seg_files = sorted(glob.glob(os.path.join(seg_dir, '*.nii.gz')))
+    if chambers:   # the chambers and wall replace the single heart shell
+        seg_files = [f for f in seg_files if os.path.basename(f) != 'heart.nii.gz']
     structures = {}
     for r in mesh_structures(seg_files, outdir):
         structures[r['name']] = {'volume_cm3': r['volume_cm3'], 'faces': r['faces']}
         print(f"    {r['name']}: {r['volume_cm3']} cm3", flush=True)
     sw.lap('meshing')
     print(f"  {len(structures)} structures meshed")
+    if modality == 'CT':
+        try:
+            import cardiac
+            if cardiac.measure(seg_dir, outdir):
+                print("  cardiac measurements written", flush=True)
+        except Exception as e:  # noqa: BLE001  (measurements must never cost a run)
+            print(f"  cardiac measurements skipped: {e}", flush=True)
 
     # 4. Combined anatomy render + report
     print("[4/4] Rendering + report...")
@@ -488,7 +550,7 @@ def run_totalseg(input_dir, outdir, modality='CT', fast=True):
                       f'TotalSegmentator — {len(structures)} structures')
     report = {'modality': modality, 'engine': 'TotalSegmentator',
               'device': dev_name, 'fast_mode': fast, 'finish': FINISH, 'gpu_worker': on_worker,
-              'num_structures': len(structures),
+              'heart_chambers': chambers, 'num_structures': len(structures),
               'runtime_sec': round(sw.total(), 1),
               'structures': structures}
     with open(os.path.join(outdir, 'report.json'), 'w') as f:

@@ -178,7 +178,17 @@
   .loading{position:absolute;left:50%;top:16px;transform:translateX(-50%);font:500 12px var(--mono);color:var(--text-2);
     background:rgba(255,255,255,.92);padding:4px 11px;border-radius:999px;border:1px solid var(--border);display:none;}
   .viewpanel{position:absolute;right:14px;bottom:14px;width:176px;background:rgba(255,255,255,.94);border:1px solid var(--border);
-    border-radius:var(--radius);padding:12px;backdrop-filter:blur(8px);box-shadow:var(--shadow);}
+    border-radius:var(--radius);padding:12px;backdrop-filter:blur(8px);box-shadow:var(--shadow);
+    max-height:calc(100% - 28px);overflow:auto;}
+  .views{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
+  .views button{font:500 11.5px var(--sans,inherit);padding:4px 0;border:1px solid var(--border);border-radius:6px;
+    background:var(--surface,#fff);color:var(--text);cursor:pointer;}
+  .views button:hover{border-color:var(--primary);}
+  .views button[aria-pressed=true]{border-color:var(--primary);color:var(--primary);}
+  .hovertip{position:absolute;transform:translate(12px,-50%);background:#1F2933;color:#fff;font:500 12.5px var(--sans,inherit);
+    padding:3px 8px;border-radius:6px;pointer-events:none;z-index:6;display:none;white-space:nowrap;}
+  .cardio td{padding:3px 0;font-size:13px;} .cardio td:last-child{text-align:right;font-family:var(--mono);}
+  .cardio tr.sub td{color:var(--text-2);font-size:12px;padding-top:0;}
   .viewpanel .lbl{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);margin-bottom:6px;}
   .viewpanel .lbl+*{margin-bottom:12px;}
   .radio{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer;}
@@ -375,7 +385,18 @@
           <div class="stage-title"><div class="t" id="stageTitle"></div><div class="s" id="stageSub"></div></div>
           <div class="loading" id="loading"></div>
           <div class="hint" id="hint">Drag to rotate · scroll to zoom</div>
+          <div class="hovertip" id="hovertip"></div>
           <div class="viewpanel" id="viewpanel">
+            <div class="lbl">View</div>
+            <div class="views" id="views" role="group" aria-label="Standard views">
+              <button data-view="front" title="Anterior: from the patient's front">Front</button>
+              <button data-view="back" title="Posterior: from the patient's back">Back</button>
+              <button data-view="top" title="Superior: from above the head">Top</button>
+              <button data-view="left" title="Left lateral: from the patient's left">Left</button>
+              <button data-view="right" title="Right lateral: from the patient's right">Right</button>
+              <button data-view="lao" title="Left anterior oblique 30°, as in angiography">LAO</button>
+              <button data-view="rao" title="Right anterior oblique 30°, as in angiography">RAO</button>
+            </div>
             <div class="lbl">Display</div>
             <div role="radiogroup" aria-label="Display">
               <label class="radio"><input type="radio" name="render" value="surface" checked>Surface</label>
@@ -398,6 +419,7 @@
             </div>
             <div class="togrow"><span>Measure distance</span><label class="switch"><input type="checkbox" id="measureOn" aria-label="Measure distance"><i></i></label></div>
             <div id="measureOut" class="muted" style="display:none; font-size:12px; margin:2px 0 8px">Click two points on the model.</div>
+            <div class="togrow"><span>Name on hover</span><label class="switch"><input type="checkbox" id="hoverOn" checked aria-label="Show structure names on hover"><i></i></label></div>
             <div class="lbl">Background</div>
             <div class="swatches">
               <button class="swatch" data-bg="" aria-pressed="true" title="Studio" aria-label="Studio background" style="background:radial-gradient(circle,#fff,#E6E4DF)"></button>
@@ -429,6 +451,12 @@
         <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 20h18M6 16l4-6 4 3 5-8"/></svg></span>
           <h2>Accuracy estimate</h2><span class="aside"><span class="pill" title="Morya and Wage, 2026 (docs/paper)">MEDSYS study</span></span></div>
         <div class="card-b" id="accuracy"><p class="muted">Select a scan.</p></div>
+      </section>
+
+      <section class="card" id="cardiacCard" style="display:none">
+        <div class="card-h"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>
+          <h2>Cardiac measurements</h2><span class="aside"><span class="pill">Research</span></span></div>
+        <div class="card-b" id="cardiac"></div>
       </section>
 
       <section class="card">
@@ -477,6 +505,9 @@ const ANATOMY = [
 ];
 // Organs outside the main groups, in natural tones.
 const EXTRA = {
+  // Heart chambers: left (oxygenated) side red, right side blue, wall muscle red-brown.
+  heart_ventricle_left:['Heart','#C0392B'], heart_atrium_left:['Heart','#DB6A5E'], atrial_appendage_left:['Heart','#DB6A5E'],
+  heart_ventricle_right:['Heart','#3E6DB5'], heart_atrium_right:['Heart','#7096D0'], heart_myocardium:['Heart','#A8413F'],
   body:['Context','#D9D6CF'], uptake_region:['Context','#F2B632'], soft_tissue:['Soft tissue','#E8C9B5'],
   brain_surface:['Brain','#C9C2D6'], gray_matter:['Brain','#D9A9A4'], white_matter:['Brain','#F1E7D8'],
   spleen:['Other organs','#7B3448'], kidney_left:['Other organs','#9A4436'], kidney_right:['Other organs','#9A4436'],
@@ -526,6 +557,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 host.appendChild(renderer.domElement);
+cam.up.set(0, 0, 1);               // scan's long axis up: orbiting turns the body like a turntable
 const ctrl = new OrbitControls(cam, renderer.domElement); ctrl.enableDamping = true;
 // Soft studio lighting: a room environment for reflections plus a key and rim
 // light. Display only: it never changes the geometry that is measured.
@@ -621,6 +653,7 @@ renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, 
 renderer.domElement.addEventListener('pointerup', e => {
   if (!MEASURE.on || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
   const r = renderer.domElement.getBoundingClientRect();
+  cam.updateMatrixWorld(); group.updateMatrixWorld();   // current even if no frame was drawn since the view changed
   raycaster.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), cam);
   const targets = [...parts.values()].filter(p => p.mesh && p.mesh.visible).map(p => p.mesh);
   const hit = raycaster.intersectObjects(targets, false).find(h => !(SLICE.on && SLICE.vol) || h.point.z <= clipPlane.constant);
@@ -676,6 +709,11 @@ async function sliceLoad(ds, token){
     const [nx, ny, nz] = meta.shape, [dx, dy, dz] = meta.step_mm;
     if (buf.byteLength !== nx * ny * nz) return;
     SLICE.vol = new Uint8Array(buf); SLICE.meta = meta;
+    if (Array.isArray(meta.axcodes)){
+      VIEW.axcodes = meta.axcodes;
+      setMirror(patientHandedness() < 0);
+      if (!VIEW.touched) setView('front');
+    }
     SLICE.tex = new THREE.DataTexture(new Uint8Array(nx * ny * 4), nx, ny, THREE.RGBAFormat);
     SLICE.tex.colorSpace = THREE.SRGBColorSpace;
     // Pixel centres sit on voxel centres, as mesh vertices do (index * spacing).
@@ -750,6 +788,149 @@ window.medsysView = (azDeg, elDeg = 0) => {
   cam.lookAt(ctrl.target); renderer.render(scene, cam);
 };
 
+// ---------- Standard views (front, back, sides, top, LAO/RAO 30°) ----------
+// Directions come from the scan's orientation: ct_preview.json "axcodes" names
+// the patient direction each array axis runs toward. Until it arrives, LAS is
+// assumed, the layout TotalSegmentator's DICOM conversion writes. The camera's
+// up is the scan's third axis, which is superior in that layout.
+const VIEW = {axcodes:['L', 'A', 'S'], touched:false};
+function patientAxis(letter){
+  const opp = {L:'R', R:'L', A:'P', P:'A', S:'I', I:'S'}[letter], v = new THREE.Vector3();
+  VIEW.axcodes.forEach((c, i) => { if (c === letter) v.setComponent(i, 1); else if (c === opp) v.setComponent(i, -1); });
+  return v;
+}
+// Meshes are built in array-index space (index * spacing). When the array's
+// axes form a left-handed patient frame (LAS, the usual NIfTI layout), drawing
+// them as they are shows a mirror image: the heart on the patient's right.
+// The model, the scan slice and every marker are then mirrored across x, so
+// left and right are true. Distances are unchanged.
+function patientHandedness(){
+  const R = patientAxis('R'), A = patientAxis('A'), S = patientAxis('S');
+  return Math.sign(R.cross(A).dot(S)) || 1;
+}
+function setMirror(on){
+  const s = on ? -1 : 1;
+  if (group.scale.x === s) return;
+  group.scale.x = sliceGroup.scale.x = s;
+  group.position.x = -group.position.x;          // keeps the model centred
+  invalidate();
+}
+function setView(name, dist){
+  const A = patientAxis('A'), L = patientAxis('L'), S = patientAxis('S'), c30 = Math.cos(Math.PI / 6), s30 = .5;
+  const dir = {
+    front: A, back: A.clone().negate(), left: L, right: L.clone().negate(),
+    top: S.clone().add(A.clone().multiplyScalar(-.02)),       // tiny tilt keeps "up" defined
+    lao: A.clone().multiplyScalar(c30).addScaledVector(L, s30),
+    rao: A.clone().multiplyScalar(c30).addScaledVector(L, -s30),
+  }[name];
+  if (!dir) return;
+  dir.x *= group.scale.x;                        // model frame -> world when mirrored
+  const d = dist || cam.position.distanceTo(ctrl.target);
+  ctrl.enabled = true;
+  cam.position.copy(dir.normalize().multiplyScalar(d)).add(ctrl.target);
+  cam.lookAt(ctrl.target); ctrl.update();
+  document.querySelectorAll('#views button').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === name));
+  invalidate();
+}
+$('views').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setView(b.dataset.view); });
+ctrl.addEventListener('start', () => {
+  VIEW.touched = true;
+  document.querySelectorAll('#views button').forEach(b => b.setAttribute('aria-pressed', 'false'));
+});
+
+// ---------- Structure name on hover ----------
+// Raycasts at most every 60 ms and never while a button is held (rotating).
+const tip = $('hovertip');
+let hoverT = 0, hoverEv = null;
+function hoverPick(){
+  hoverT = 0;
+  const e = hoverEv;
+  if (!e || !$('hoverOn').checked || (MEASURE.on && MEASURE.pts.length === 1)){ tip.style.display = 'none'; return; }
+  const r = renderer.domElement.getBoundingClientRect(), h = $('stage').getBoundingClientRect();
+  cam.updateMatrixWorld(); group.updateMatrixWorld();   // current even if no frame was drawn since the view changed
+  raycaster.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), cam);
+  const byMesh = new Map();
+  for (const [name, p] of parts) if (p.mesh && p.mesh.visible) byMesh.set(p.mesh, name);
+  const hit = raycaster.intersectObjects([...byMesh.keys()], false).find(x => !(SLICE.on && SLICE.vol) || x.point.z <= clipPlane.constant);
+  if (!hit){ tip.style.display = 'none'; return; }
+  tip.textContent = pretty(byMesh.get(hit.object));
+  tip.style.left = `${e.clientX - h.left}px`; tip.style.top = `${e.clientY - h.top}px`; tip.style.display = '';
+}
+renderer.domElement.addEventListener('pointermove', e => {
+  if (e.buttons){ tip.style.display = 'none'; return; }
+  hoverEv = e; if (!hoverT) hoverT = setTimeout(hoverPick, 60);
+});
+renderer.domElement.addEventListener('pointerleave', () => { hoverEv = null; tip.style.display = 'none'; });
+$('hoverOn').addEventListener('change', () => { if (!$('hoverOn').checked) tip.style.display = 'none'; });
+
+// ---------- Cardiac measurements (cardiac.json, written by cardiac.py) ----------
+const CARDIO = {objs:[], labels:[]};
+function cardioClear(){
+  for (const o of CARDIO.objs){ group.remove(o); o.geometry.dispose(); o.material.dispose(); }
+  for (const l of CARDIO.labels) l.el.remove();
+  CARDIO.objs = []; CARDIO.labels = [];
+}
+function cardioMark(pt, text){
+  const v = new THREE.Vector3(...pt);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 12), new THREE.MeshBasicMaterial({color:'#FF7A18', depthTest:false}));
+  m.position.copy(v); m.renderOrder = 21; group.add(m); CARDIO.objs.push(m);
+  const el = document.createElement('div');
+  el.style.cssText = 'position:absolute;transform:translate(10px,-50%);background:#1F2933;color:#fff;font:600 12px var(--mono);padding:3px 7px;border-radius:6px;pointer-events:none;z-index:5;white-space:nowrap';
+  el.textContent = text; $('stage').appendChild(el); CARDIO.labels.push({el, v});
+}
+function cardioLabelPos(){
+  if (!CARDIO.labels.length) return;
+  const r = renderer.domElement.getBoundingClientRect(), h = $('stage').getBoundingClientRect();
+  for (const {el, v} of CARDIO.labels){
+    const p = v.clone().applyMatrix4(group.matrixWorld).project(cam);
+    el.style.left = `${(p.x + 1) / 2 * r.width + r.left - h.left}px`;
+    el.style.top = `${(1 - p.y) / 2 * r.height + r.top - h.top}px`;
+    el.style.display = p.z < 1 ? '' : 'none';
+  }
+}
+const AORTA_REGION = {ascending:'Ascending aorta', arch:'Aortic arch', descending:'Descending aorta'};
+const aortaWidth = b => (b.cross_section ? b.cross_section.max_mm : b.max_mm).toFixed(1);
+async function cardioLoad(ds, token){
+  cardioClear();
+  $('cardiacCard').style.display = 'none';
+  let c;
+  try{
+    const r = await fetch(`/output/${encodeURIComponent(ds.name)}/cardiac.json`);
+    if (!r.ok) return;
+    c = await r.json();
+  }catch(e){ return; }
+  if (token !== loadToken) return;
+  const head = (t, top) => `<tr><td colspan="2" class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;padding-top:${top}px">${t}</td></tr>`;
+  const rows = [], a = c.aorta;
+  const regs = a ? Object.keys(AORTA_REGION).filter(k => a.regions && a.regions[k]) : [];
+  const marks = regs.length ? regs.map(k => [AORTA_REGION[k], a.regions[k]]) : (a && a.max ? [['Aorta', a.max]] : []);
+  if (marks.length){
+    rows.push(head('Aorta, largest width', 0));
+    for (const [lab, b] of marks){
+      rows.push(`<tr><td>${lab}</td><td>${aortaWidth(b)} mm</td></tr>`);
+      if (b.cross_section) rows.push(`<tr class="sub"><td>round-equivalent ${b.cross_section.equiv_mm.toFixed(1)} · inscribed ${b.max_mm.toFixed(1)}</td><td></td></tr>`);
+    }
+  }
+  if ((c.chambers || []).length || c.heart_volume_ml != null){
+    rows.push(head('Volumes', marks.length ? 10 : 0));
+    if (c.heart_volume_ml != null) rows.push(`<tr><td>Whole heart</td><td>${c.heart_volume_ml.toFixed(0)} ml</td></tr>`);
+    for (const ch of c.chambers || []) rows.push(`<tr><td>${esc(ch.label)}</td><td>${ch.volume_ml.toFixed(1)} ml</td></tr>`);
+  }
+  if (!rows.length) return;
+  const hasChambers = (c.chambers || []).some(ch => ch.name.startsWith('heart_'));
+  $('cardiac').innerHTML = `<table class="cardio" style="width:100%">${rows.join('')}</table>`
+    + (marks.length ? '<div class="togrow" style="margin-top:10px"><span>Mark widest points on the model</span><label class="switch"><input type="checkbox" id="aortaMarks" aria-label="Mark widest aorta points"><i></i></label></div>' : '')
+    + (hasChambers ? '' : '<p class="muted" style="font-size:12px;margin-top:8px">Chamber volumes need the heart-chamber model (TotalSegmentator licence).</p>')
+    + `<p class="muted" style="font-size:12px;margin-top:8px">Width: largest distance across a cut at right angles to the vessel's centreline, where each part is widest. ${esc(c.note || '')}</p>`;
+  $('cardiacCard').style.display = '';
+  const t = $('aortaMarks');
+  if (t) t.addEventListener('change', () => {
+    cardioClear();
+    if (t.checked) for (const [lab, b] of marks) cardioMark(b.point_mm, `${aortaWidth(b)} mm`);
+    invalidate();
+  });
+}
+
 // Render on demand: only when the view or the scene changed, and never while
 // the Renders tab covers the 3D view. Any input on the page counts as a change,
 // and a slow heartbeat catches anything else (meshes arriving, layout).
@@ -766,7 +947,7 @@ setInterval(invalidate, 400);
   sliceGroup.position.copy(group.position);
   if (SLICE.plane) clipPlane.constant = SLICE.plane.position.z + group.position.z;
   renderer.render(scene, cam);
-  measureLabelPos();
+  measureLabelPos(); cardioLabelPos();
 })();
 
 function clearModel(){
@@ -785,8 +966,9 @@ function frame(){
   group.position.copy(c).negate();
   const maxd = Math.max(s.x, s.y, s.z) || 200;
   const dist = maxd / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2)) * 1.25;
-  cam.position.set(0, 0, dist); cam.near = dist / 100; cam.far = dist * 20; cam.updateProjectionMatrix();
-  ctrl.target.set(0, 0, 0); ctrl.update();
+  cam.near = dist / 100; cam.far = dist * 20; cam.updateProjectionMatrix();
+  ctrl.target.set(0, 0, 0);
+  setView('front', dist); VIEW.touched = false;
 }
 
 // ---------- display: render mode, opacity, background ----------
@@ -1208,12 +1390,14 @@ function selectDataset(name){
   $('stageSub').textContent = r.engine ? `${r.engine}${r.fast_mode ? ' · fast' : ''}` : '';
   showView('3d');
   loadToken++;              // drop any meshes still arriving for the previous scan
-  measureClear();
+  measureClear(); cardioClear(); tip.style.display = 'none';
+  VIEW.axcodes = ['L', 'A', 'S']; setMirror(false);   // unknown until ct_preview.json says otherwise
   clearModel();
   buildDatasetCard(ds); buildStructures(ds); buildMetrics(ds); buildAccuracy(ds); buildThumbs(ds);
   $('checks').innerHTML = '<p class="muted">Runs once the model loads.</p>'; $('checkState').textContent = '';
   loadModel(ds);
   sliceLoad(ds, loadToken);
+  cardioLoad(ds, loadToken);
 }
 async function loadDatasets(prefer){
   const sel = $('dsSelect');
