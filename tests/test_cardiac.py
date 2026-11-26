@@ -62,7 +62,7 @@ def test_arch_is_split_into_ascending_arch_and_descending():
 
 
 def test_measure_writes_volumes(tmp_path):
-    import nibabel as nib
+    nib = pytest.importorskip('nibabel')     # not in the CI requirements
     seg = tmp_path / 'segmentations'
     seg.mkdir()
     aff = np.diag([-0.5, 0.5, 2.0, 1.0])               # LAS, 0.5 mm voxels

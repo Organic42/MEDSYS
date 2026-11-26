@@ -343,7 +343,8 @@ else:
     assert anchor in html, 'Limitations slide not found'
     html = html.replace(anchor, slides + '\n\n' + anchor, 1)
 open(deck, 'w', encoding='utf-8', newline='').write(html.replace('\n', '\r\n') if crlf else html)
-print(f'slides written: {html.count("<section class=\"slide")} slides in deck')
+n_slides = html.count('<section class="slide')
+print(f'slides written: {n_slides} slides in deck')
 print(f'test1: res {res_inside:.0f}% mae {res_mae:.3f}; at least {at_least:.0f}%; smooth {smooth_match:.3f}; '
       f'wt {wt_agree}/{n_mesh}; worst {100 * worst.v1_mid:.0f}->{100 * worst.v2_mid:.0f}; v2 {v2_mid:.0f}/{v2_p90:.0f}')
 print(f'test2: scans {n_rep_scans} runs {n_runs} max shift {max_shift:.4f} rebuild {rebuild}')
