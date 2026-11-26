@@ -559,12 +559,25 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure
 host.appendChild(renderer.domElement);
 cam.up.set(0, 0, 1);               // scan's long axis up: orbiting turns the body like a turntable
 const ctrl = new OrbitControls(cam, renderer.domElement); ctrl.enableDamping = true;
-// Soft studio lighting: a room environment for reflections plus a key and rim
+// Soft studio lighting: a room environment for reflections plus a key and fill
 // light. Display only: it never changes the geometry that is measured.
+// The key and fill move with the camera (upper right and lower left of the
+// viewer), so whichever side faces the viewer is lit, whatever way the scan
+// faces. Sky light comes from the head end of the scan (+z).
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7f78, .45));
-const key = new THREE.DirectionalLight(0xffffff, 1.1); key.position.set(1, 1.2, 1); scene.add(key);
-const fillLight = new THREE.DirectionalLight(0xfff0e3, .45); fillLight.position.set(-1, -.4, -1); scene.add(fillLight);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8a7f78, .45); hemi.position.set(0, 0, 1); scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffffff, 1.1); scene.add(key);
+const fillLight = new THREE.DirectionalLight(0xfff0e3, .45); scene.add(fillLight);
+const _camR = new THREE.Vector3(), _camU = new THREE.Vector3();
+function placeLights(){
+  cam.updateMatrixWorld();
+  const d = cam.position.distanceTo(ctrl.target) || 1;
+  _camR.setFromMatrixColumn(cam.matrixWorld, 0); _camU.setFromMatrixColumn(cam.matrixWorld, 1);
+  key.position.copy(cam.position).addScaledVector(_camR, .8 * d).addScaledVector(_camU, .9 * d);
+  fillLight.position.copy(cam.position).addScaledVector(_camR, -.9 * d).addScaledVector(_camU, -.4 * d);
+  key.target.position.copy(ctrl.target); fillLight.target.position.copy(ctrl.target);
+  key.target.updateMatrixWorld(); fillLight.target.updateMatrixWorld();
+}
 const group = new THREE.Group(); scene.add(group);
 const loader = new STLLoader();
 const parts = new Map();          // label -> {mesh, mat, cat, color, row, check}
@@ -785,7 +798,7 @@ window.medsysView = (azDeg, elDeg = 0) => {
   const d = cam.position.distanceTo(ctrl.target), a = THREE.MathUtils.degToRad(azDeg), e = THREE.MathUtils.degToRad(elDeg);
   ctrl.enabled = false; cam.up.set(0, 0, 1);
   cam.position.set(d * Math.cos(e) * Math.cos(a), d * Math.cos(e) * Math.sin(a), d * Math.sin(e)).add(ctrl.target);
-  cam.lookAt(ctrl.target); renderer.render(scene, cam);
+  cam.lookAt(ctrl.target); placeLights(); renderer.render(scene, cam);
 };
 
 // ---------- Standard views (front, back, sides, top, LAO/RAO 30°) ----------
@@ -946,6 +959,7 @@ setInterval(invalidate, 400);
   dirty = false;
   sliceGroup.position.copy(group.position);
   if (SLICE.plane) clipPlane.constant = SLICE.plane.position.z + group.position.z;
+  placeLights();
   renderer.render(scene, cam);
   measureLabelPos(); cardioLabelPos();
 })();
@@ -1041,7 +1055,7 @@ document.querySelectorAll('.tool[data-mode]').forEach(b => b.addEventListener('c
 }));
 $('resetView').onclick = frame;
 $('snapshot').onclick = () => {
-  renderer.render(scene, cam);   // read the buffer in the same frame it was drawn
+  placeLights(); renderer.render(scene, cam);   // read the buffer in the same frame it was drawn
   const src = renderer.domElement, out = document.createElement('canvas');
   out.width = src.width; out.height = src.height;
   const g = out.getContext('2d');
