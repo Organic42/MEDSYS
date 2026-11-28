@@ -96,6 +96,10 @@ Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segment
 
 <sub>The CT slice view at heart level.</sub>
 
+<img src="docs/images/accuracy-colour-map.jpg" alt="Heart and great vessels in the LAO view, coloured by surface accuracy: almost entirely green, within 0.5 mm of the AI outline, with a few amber specks near 1 mm" width="60%">
+
+<sub>The accuracy colour map on the heart and great vessels (LAO view): each point of the surface is coloured by its distance from the AI outline, green within 0.5 mm, amber about 1 mm, red 1.5 mm or more.</sub>
+
 <img src="docs/images/explorer.png" alt="Neuroplasticity Explorer answering how regular exercise changes the brain, with four highlighted regions and their evidence" width="100%">
 
 <sub>The Neuroplasticity Explorer: asking how regular exercise changes the brain highlights the four regions most affected and tags each finding by the strength of its evidence.</sub>
