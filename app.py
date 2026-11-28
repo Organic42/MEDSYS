@@ -231,28 +231,6 @@ def list_datasets(x_visitor: str = Header(None)):
     return {'datasets': out}
 
 
-# ── Neuroplasticity Explorer ─────────────────────────────────────────────
-
-@app.get('/api/brain/regions')
-def brain_regions():
-    """Region catalog — the frontend builds its 3D scene from this."""
-    import brain_knowledge
-    return {'regions': brain_knowledge.REGIONS,
-            'suggestions': brain_knowledge.SUGGESTIONS,
-            'engine': 'hybrid' if brain_knowledge.claude_available() else 'curated'}
-
-
-@app.post('/api/brain/ask')
-async def brain_ask(question: str = Form(...)):
-    import brain_knowledge
-    q = (question or '').strip()
-    if not q:
-        raise HTTPException(400, 'Ask a question first')
-    if len(q) > 500:
-        raise HTTPException(400, 'Question too long (500 char max)')
-    return brain_knowledge.answer(q)
-
-
 # static: serve generated outputs and the frontend
 app.mount('/output', StaticFiles(directory=config.OUTPUT_ROOT), name='output')
 app.mount('/', StaticFiles(directory=config.WEB_DIR, html=True), name='web')

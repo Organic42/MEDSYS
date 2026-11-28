@@ -20,8 +20,6 @@ python-multipart>=0.0.9
 # Production queue
 redis>=5.0.0
 rq>=1.16.0
-# Neuroplasticity Explorer — optional; without it the page serves curated topics only
-anthropic>=0.40.0
 # Deep-learning engine (optional, GPU recommended)
 TotalSegmentator>=2.0.0
 dicom2nifti>=2.4.0

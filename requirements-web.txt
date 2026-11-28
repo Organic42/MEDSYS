@@ -28,5 +28,3 @@ scikit-learn>=1.3.0
 fastapi>=0.110.0
 uvicorn>=0.27.0
 python-multipart>=0.0.9
-# Neuroplasticity Explorer — optional; without it the page serves curated topics only
-anthropic>=0.40.0

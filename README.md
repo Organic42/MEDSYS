@@ -69,7 +69,6 @@ Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segment
 | **Engines** | A fast classical engine (intensity thresholds, BET, Gaussian mixture) and TotalSegmentator (nnU-Net) for 100+ labelled structures, with MedSAM refinement for MRI |
 | **Workbench** | Dataset, structures and pipeline on the left; a 3D stage with surface, wireframe and X-ray modes in the centre; mesh checks, the accuracy estimate and reference metrics on the right |
 | **Measured, not guessed** | Mesh checks show real structural data (on the CT above: 46 of 79 meshes closed, 43 of 79 in one piece, 58 of 79 manifold, 817,158 triangles). The accuracy estimate gives every mesh the error its voxel spacing alone imposes, measures how far smoothing and simplification moved it, and shows the engine's error against expert labels where the study measured it (TotalSegmentator on spleen and pancreas), saying "not validated" everywhere else. Each line says what it rests on: *measured on this model*, *estimated for this scan*, or *study benchmark* from other scans, so a benchmark is never read as this patient's error. Each line was checked against the true error of 590 of the app's own meshes ([validation report](docs/validation/validation-report.pdf)) and on 710 meshes from unseen AMOS scans |
-| **Neuroplasticity Explorer** | Questions about behaviour and the brain, answered from a curated evidence base and mapped onto a 3D brain |
 | **Speed** | A persistent GPU worker keeps TotalSegmentator and MedSAM loaded between jobs (5.3 s instead of 28.7 s of segmentation per CT scan), and structures are meshed in parallel processes (10.7 s instead of 57.3 s for 79 meshes): about 21 s for a whole chest CT job |
 | **Deployment** | Docker Compose (API, Redis and workers), a lightweight Hugging Face Spaces image with a public demo mode, and a standalone Windows build |
 
@@ -99,10 +98,6 @@ Upload a zipped DICOM study in the browser. MEDSYS detects the modality, segment
 <img src="docs/images/accuracy-colour-map.jpg" alt="Heart and great vessels in the LAO view, coloured by surface accuracy: almost entirely green, within 0.5 mm of the AI outline, with a few amber specks near 1 mm" width="60%">
 
 <sub>The accuracy colour map on the heart and great vessels (LAO view): each point of the surface is coloured by its distance from the AI outline, green within 0.5 mm, amber about 1 mm, red 1.5 mm or more.</sub>
-
-<img src="docs/images/explorer.png" alt="Neuroplasticity Explorer answering how regular exercise changes the brain, with four highlighted regions and their evidence" width="100%">
-
-<sub>The Neuroplasticity Explorer: asking how regular exercise changes the brain highlights the four regions most affected and tags each finding by the strength of its evidence.</sub>
 
 ## Research question
 
@@ -409,8 +404,7 @@ MEDSYS/
 ├── samples/                   # Public de-identified chest CT used by the demo
 ├── deploy/                    # Hugging Face Space publisher
 ├── app.py, tasks.py, worker.py, jobstore.py, config.py   # Web service and job handling
-├── web/                       # Workbench and Neuroplasticity Explorer
-├── brain_knowledge.py         # Explorer evidence base
+├── web/                       # Workbench
 └── Dockerfile, Dockerfile.web, docker-compose.yml, requirements*.txt
 ```
 
